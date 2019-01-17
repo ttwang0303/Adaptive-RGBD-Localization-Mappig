@@ -17,7 +17,7 @@ AdaptiveRGBDLocalization::AdaptiveRGBDLocalization()
     srand((long)clock());
 
     ransac = new Ransac(20, 200, 3.0f, 4);
-    icp = new GeneralizedICP(10, 0.05);
+    icp = new GeneralizedICP(15, 0.05);
 }
 
 AdaptiveRGBDLocalization::AdaptiveRGBDLocalization(const AdaptiveRGBDLocalization::Algorithm algorithm)
@@ -36,13 +36,13 @@ AdaptiveRGBDLocalization::AdaptiveRGBDLocalization(const AdaptiveRGBDLocalizatio
         break;
 
     case ICP:
-        icp = new GeneralizedICP(10, 0.05);
+        icp = new GeneralizedICP(15, 0.05);
         ransac = nullptr;
         break;
 
     case RANSAC_ICP:
         ransac = new Ransac(20, 200, 3.0f, 4);
-        icp = new GeneralizedICP(10, 0.05);
+        icp = new GeneralizedICP(15, 0.05);
         break;
     }
 }

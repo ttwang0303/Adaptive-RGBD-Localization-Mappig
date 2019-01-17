@@ -37,14 +37,14 @@ int main()
 
     cv::Ptr<cv::FeatureDetector> pDetector = cv::xfeatures2d::SURF::create();
     cv::Ptr<cv::DescriptorExtractor> pDescriptor = cv::ORB::create();
-    cv::Ptr<cv::DescriptorMatcher> pMatcher = cv::DescriptorMatcher::create("BruteForce-Hamming" /*"BruteForce"*/);
+    cv::Ptr<cv::DescriptorMatcher> pMatcher = cv::DescriptorMatcher::create(pDescriptor->defaultNorm());
 
     ofstream f("CameraTrajectory.txt");
     f << fixed;
     Frame* prevFrame = new Frame();
     cv::Mat imColor, imDepth;
 
-    AdaptiveRGBDLocalization odometry(AdaptiveRGBDLocalization::RANSAC);
+    AdaptiveRGBDLocalization odometry(AdaptiveRGBDLocalization::RANSAC_ICP);
 
     for (int i = 0; i < nImages; i += 1) {
         imColor = cv::imread(baseDir + vImageFilenamesRGB[i], cv::IMREAD_COLOR);

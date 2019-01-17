@@ -32,7 +32,7 @@ public:
     void setMaxCorrespondenceDistance(double dist);
 
 private:
-    void CreateCloudsFromMatches(const Frame* pF1, const Frame* pF2, const std::vector<cv::DMatch>& vMatches12);
+    void CreateCloudsFromMatches(const Frame* pF1, const Frame* pF2, const std::vector<cv::DMatch>& vMatches12, const Eigen::Matrix4f& T12, const bool& calcDist = false);
 
     std::vector<cv::DMatch> GetSubset(const std::vector<cv::DMatch>& vMatches12);
 

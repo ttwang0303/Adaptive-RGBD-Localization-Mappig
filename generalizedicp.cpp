@@ -21,16 +21,17 @@ GeneralizedICP::GeneralizedICP(int iters, double maxCorrespondenceDist)
 
 bool GeneralizedICP::Compute(const Frame* pF1, const Frame* pF2, const vector<cv::DMatch>& vMatches12, Eigen::Matrix4f& guess)
 {
-    CreateCloudsFromMatches(pF1, pF2, vMatches12);
+    CreateCloudsFromMatches(pF1, pF2, vMatches12, guess, true);
     return Align(guess);
 }
 
 bool GeneralizedICP::ComputeSubset(const Frame* pF1, const Frame* pF2, const vector<cv::DMatch>& vMatches12)
 {
     vector<cv::DMatch> vMatchesSubset = GetSubset(vMatches12);
-    CreateCloudsFromMatches(pF1, pF2, vMatchesSubset);
-
     Eigen::Matrix4f guess = Eigen::Matrix4f::Identity();
+
+    CreateCloudsFromMatches(pF1, pF2, vMatchesSubset, guess, false);
+
     return Align(guess);
 }
 
@@ -61,10 +62,23 @@ void GeneralizedICP::SetMaximumIterations(int iters) { mGicp.setMaximumIteration
 
 void GeneralizedICP::setMaxCorrespondenceDistance(double dist) { mGicp.setMaxCorrespondenceDistance(dist); }
 
-void GeneralizedICP::CreateCloudsFromMatches(const Frame* pF1, const Frame* pF2, const vector<cv::DMatch>& vMatches12)
+void GeneralizedICP::CreateCloudsFromMatches(const Frame* pF1, const Frame* pF2, const vector<cv::DMatch>& vMatches12, const Eigen::Matrix4f& T12, const bool& calcDist)
 {
     mSrcCloud->clear();
     mTgtCloud->clear();
+
+    double dist = 0.0;
+    cv::Mat R(3, 3, CV_32F);
+    cv::Mat t(3, 1, CV_32F);
+
+    if (calcDist) {
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 3; ++j)
+                R.at<float>(i, j) = T12(i, j);
+
+        for (int i = 0; i < 3; ++i)
+            t.at<float>(i, 0) = T12(i, 3);
+    }
 
     for (const auto& m : vMatches12) {
         const cv::Point3f& source = pF1->kps3Dc[m.queryIdx];
@@ -74,6 +88,14 @@ void GeneralizedICP::CreateCloudsFromMatches(const Frame* pF1, const Frame* pF2,
             continue;
         if (source.z <= 0 || target.z <= 0)
             continue;
+
+        if (calcDist) {
+            cv::Mat src = (cv::Mat_<float>(3, 1) << source.x, source.y, source.z);
+            cv::Mat tgt = (cv::Mat_<float>(3, 1) << target.x, target.y, target.z);
+
+            cv::Mat trans = R * src + t;
+            dist += cv::norm(trans - tgt);
+        }
 
         mSrcCloud->points.push_back(pcl::PointXYZ(source.x, source.y, source.z));
         mTgtCloud->points.push_back(pcl::PointXYZ(target.x, target.y, target.z));
@@ -86,6 +108,11 @@ void GeneralizedICP::CreateCloudsFromMatches(const Frame* pF1, const Frame* pF2,
     mTgtCloud->height = 1;
     mTgtCloud->width = mTgtCloud->points.size();
     mTgtCloud->is_dense = false;
+
+    if (calcDist) {
+        double meanDist = dist / mTgtCloud->size();
+        setMaxCorrespondenceDistance(std::min(std::max(0.01, meanDist), 0.09));
+    }
 }
 
 vector<cv::DMatch> GeneralizedICP::GetSubset(const vector<cv::DMatch>& vMatches12)
