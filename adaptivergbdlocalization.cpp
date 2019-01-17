@@ -10,8 +10,6 @@ using namespace std;
 AdaptiveRGBDLocalization::AdaptiveRGBDLocalization()
     : mAlgorithm(RANSAC_ICP)
     , mStatus(false)
-    , mCounter(0)
-    , mAcumRmse(0)
     , T(Eigen::Matrix4f::Identity())
     , mMiu1(5.0)
     , mMiu2(20.0)
@@ -25,8 +23,6 @@ AdaptiveRGBDLocalization::AdaptiveRGBDLocalization()
 AdaptiveRGBDLocalization::AdaptiveRGBDLocalization(const AdaptiveRGBDLocalization::Algorithm algorithm)
     : mAlgorithm(algorithm)
     , mStatus(false)
-    , mCounter(0)
-    , mAcumRmse(0)
     , T(Eigen::Matrix4f::Identity())
     , mMiu1(5.0)
     , mMiu2(20.0)
@@ -64,68 +60,17 @@ cv::Mat AdaptiveRGBDLocalization::Compute(Frame* pF1, Frame* pF2, vector<cv::DMa
 {
     switch (mAlgorithm) {
     case RANSAC:
-        if (ransac->Compute(pF1, pF2, vMatches12)) {
-            T = ransac->GetTransformation();
-            mStatus = true;
-        } else {
-            T = Eigen::Matrix4f::Identity();
-            mStatus = false;
-        }
+        ComputeRansac(pF1, pF2, vMatches12);
         break;
 
     case ICP:
-        if (icp->Compute(pF1, pF2, vMatches12, T)) {
-            T = icp->GetTransformation();
-            mStatus = true;
-        } else {
-            T = Eigen::Matrix4f::Identity();
-            mStatus = false;
-        }
+        ComputeICP(pF1, pF2, vMatches12);
         break;
 
     case RANSAC_ICP:
-        if (ransac->Compute(pF1, pF2, vMatches12)) {
-            T = ransac->GetTransformation();
-            float rmse = ransac->GetRMSE();
-            mAcumRmse += rmse;
-            mCounter++;
-            mStatus = true;
-
-            if (rmse * 10.0f > mMiu2) {
-                if (icp->ComputeSubset(pF1, pF2, ransac->GetMatches()))
-                    T = icp->GetTransformation();
-            } else if (rmse * 10.0f > mMiu1) {
-                if (icp->Compute(pF1, pF2, ransac->GetMatches(), T))
-                    T = icp->GetTransformation();
-            }
-
-        } else {
-            T = Eigen::Matrix4f::Identity();
-            mStatus = false;
-        }
+        ComputeAdaptive(pF1, pF2, vMatches12);
         break;
     }
-
-    //    if (ransac->Compute(pF1, pF2, vMatches12)) {
-    //        T = ransac->GetTransformation();
-    //        float rmse = ransac->GetRMSE();
-    //        mAcumRmse += rmse;
-    //        mCounter++;
-    //        vMatches12 = ransac->GetMatches();
-
-    //        if (rmse * 10.0f > 5.0 /*std::floor*/ /*((mAcumRmse / mCounter) * 10.0f)*/) {
-    //            if (rmse * 10.0f > 20.0f) {
-    //                if (icp->ComputeSubset(pF1, pF2, vMatches12))
-    //                    T = icp->GetTransformation();
-    //            } else {
-    //                if (icp->Compute(pF1, pF2, vMatches12, T))
-    //                    T = icp->GetTransformation();
-    //            }
-    //        }
-    //    } else {
-    //        cout << "Ransac fails" << endl;
-    //        T = Eigen::Matrix4f::Identity();
-    //    }
 
     return Converter::toCvMat(T);
 }
@@ -145,3 +90,46 @@ void AdaptiveRGBDLocalization::SetMiu2(const float miu2)
 }
 
 bool AdaptiveRGBDLocalization::hasConverged() const { return mStatus == true; }
+
+void AdaptiveRGBDLocalization::ComputeRansac(Frame* pF1, Frame* pF2, vector<cv::DMatch>& vMatches12)
+{
+    if (ransac->Compute(pF1, pF2, vMatches12)) {
+        T = ransac->GetTransformation();
+        mStatus = true;
+    } else {
+        T = Eigen::Matrix4f::Identity();
+        mStatus = false;
+    }
+}
+
+void AdaptiveRGBDLocalization::ComputeICP(Frame* pF1, Frame* pF2, vector<cv::DMatch>& vMatches12)
+{
+    if (icp->Compute(pF1, pF2, vMatches12, T)) {
+        T = icp->GetTransformation();
+        mStatus = true;
+    } else {
+        T = Eigen::Matrix4f::Identity();
+        mStatus = false;
+    }
+}
+
+void AdaptiveRGBDLocalization::ComputeAdaptive(Frame* pF1, Frame* pF2, vector<cv::DMatch>& vMatches12)
+{
+    if (ransac->Compute(pF1, pF2, vMatches12)) {
+        T = ransac->GetTransformation();
+        float rmse = ransac->GetRMSE();
+        mStatus = true;
+
+        if (rmse * 10.0f > mMiu2) {
+            if (icp->ComputeSubset(pF1, pF2, vMatches12))
+                T = icp->GetTransformation();
+        } else if (rmse * 10.0f > mMiu1) {
+            if (icp->Compute(pF1, pF2, vMatches12, T))
+                T = icp->GetTransformation();
+        }
+
+    } else {
+        T = Eigen::Matrix4f::Identity();
+        mStatus = false;
+    }
+}

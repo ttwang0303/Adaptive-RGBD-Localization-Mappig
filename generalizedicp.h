@@ -11,7 +11,7 @@ class GeneralizedICP {
 public:
     GeneralizedICP();
 
-    GeneralizedICP(size_t iters, double maxCorrespondenceDist);
+    GeneralizedICP(int iters, double maxCorrespondenceDist);
 
     ~GeneralizedICP() {}
 
@@ -27,6 +27,10 @@ public:
 
     double GetScore() const;
 
+    void SetMaximumIterations(int iters);
+
+    void setMaxCorrespondenceDistance(double dist);
+
 private:
     void CreateCloudsFromMatches(const Frame* pF1, const Frame* pF2, const std::vector<cv::DMatch>& vMatches12);
 
@@ -36,8 +40,6 @@ private:
     pcl::PointCloud<pcl::PointXYZ>::Ptr mSrcCloud;
     pcl::PointCloud<pcl::PointXYZ>::Ptr mTgtCloud;
 
-    size_t mIterations;
-    double mMaxCorrespondenceDistance;
     Eigen::Matrix4f mTransformation;
     double mScore;
 };

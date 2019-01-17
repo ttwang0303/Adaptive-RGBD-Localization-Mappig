@@ -4,16 +4,14 @@
 using namespace std;
 
 GeneralizedICP::GeneralizedICP()
-    : GeneralizedICP(10, 0.05)
+    : GeneralizedICP(15, 0.05)
 {
 }
 
-GeneralizedICP::GeneralizedICP(size_t iters, double maxCorrespondenceDist)
-    : mIterations(iters)
-    , mMaxCorrespondenceDistance(maxCorrespondenceDist)
+GeneralizedICP::GeneralizedICP(int iters, double maxCorrespondenceDist)
 {
-    mGicp.setMaximumIterations(mIterations);
-    mGicp.setMaxCorrespondenceDistance(mMaxCorrespondenceDistance);
+    mGicp.setMaximumIterations(iters);
+    mGicp.setMaxCorrespondenceDistance(maxCorrespondenceDist);
     mGicp.setEuclideanFitnessEpsilon(1);
     mGicp.setTransformationEpsilon(1e-9);
 
@@ -59,6 +57,10 @@ Eigen::Matrix4f GeneralizedICP::GetTransformation() const { return mTransformati
 
 double GeneralizedICP::GetScore() const { return mScore; }
 
+void GeneralizedICP::SetMaximumIterations(int iters) { mGicp.setMaximumIterations(iters); }
+
+void GeneralizedICP::setMaxCorrespondenceDistance(double dist) { mGicp.setMaxCorrespondenceDistance(dist); }
+
 void GeneralizedICP::CreateCloudsFromMatches(const Frame* pF1, const Frame* pF2, const vector<cv::DMatch>& vMatches12)
 {
     mSrcCloud->clear();
@@ -93,10 +95,10 @@ vector<cv::DMatch> GeneralizedICP::GetSubset(const vector<cv::DMatch>& vMatches1
 
     while (sSampledIds.size() < 0.75 * vMatches12.size()) {
         int id1 = rand() % vMatches12.size();
-        //        int id2 = rand() % vMatches12.size();
+        int id2 = rand() % vMatches12.size();
 
-        //        if (id1 > id2)
-        //            id1 = id2;
+        if (id1 > id2)
+            id1 = id2;
 
         sSampledIds.insert(id1);
 

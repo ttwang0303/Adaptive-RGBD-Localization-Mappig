@@ -36,10 +36,12 @@ public:
     GeneralizedICP* icp;
 
 private:
+    void ComputeRansac(Frame* pF1, Frame* pF2, std::vector<cv::DMatch>& vMatches12);
+    void ComputeICP(Frame* pF1, Frame* pF2, std::vector<cv::DMatch>& vMatches12);
+    void ComputeAdaptive(Frame* pF1, Frame* pF2, std::vector<cv::DMatch>& vMatches12);
+
     Algorithm mAlgorithm;
     bool mStatus;
-    int mCounter;
-    float mAcumRmse;
     Eigen::Matrix4f T;
     float mMiu1, mMiu2;
 };
