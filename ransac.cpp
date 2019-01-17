@@ -19,7 +19,7 @@ Ransac::Ransac(uint minInlierTh, int iters, float maxMahalanobisDist, uint sampl
 
 bool Ransac::Compute(Frame* pF1, Frame* pF2, vector<cv::DMatch>& m12)
 {
-    if (m12.size() <= mMinInlierTh)
+    if (m12.size() < mMinInlierTh)
         return false;
 
     uint minInlierTh;
@@ -262,14 +262,11 @@ double Ransac::DepthCovariance(double depth)
 
 double Ransac::DepthStdDev(double depth)
 {
-    // From Khoselham and Elberink?
+    // From Khoselham and Elberink
     // Factor c for the standard deviation of depth measurements: sigma_Z = c * depth * depth.
     // Khoshelham 2012 (0.001425) seems to be a bit overconfident."
     static double depth_std_dev = 0.01;
 
-    // Previously used 0.006 from information on http://www.ros.org/wiki/openni_kinect/kinect_accuracy;
-    // ...using 2sigma = 95%ile
-    //static const double depth_std_dev  = 0.006;
     return depth_std_dev * depth * depth;
 }
 

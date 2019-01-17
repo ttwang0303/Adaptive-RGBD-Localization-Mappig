@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
-project(test_icp)
+project(adaptive-rgbd-localization)
 
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_CXX_STANDARD 17)
