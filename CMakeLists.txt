@@ -61,16 +61,16 @@ include_directories(${Pangolin_INCLUDE_DIRS})
 include_directories(${PROJECT_SOURCE_DIR})
 
 add_library(${PROJECT_NAME} SHARED
-utils.cpp
-converter.cpp
-ransac.cpp
-generalizedicp.cpp
-adaptivergbdlocalization.cpp
-frame.cpp
-pointtopointicp.cpp
-ransacpcl.cpp
-viewer.cpp
-pointclouddrawer.cpp
+Utils/utils.cpp
+Utils/converter.cpp
+Odometry/ransac.cpp
+Odometry/generalizedicp.cpp
+Odometry/adaptivergbdlocalization.cpp
+Odometry/pointtopointicp.cpp
+Odometry/ransacpcl.cpp
+Core/frame.cpp
+Drawer/viewer.cpp
+Drawer/pointclouddrawer.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}

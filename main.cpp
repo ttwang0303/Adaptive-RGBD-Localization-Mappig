@@ -1,11 +1,12 @@
-#include "constants.h"
-#include "converter.h"
-#include "frame.h"
-#include "generalizedicp.h"
-#include "pointclouddrawer.h"
-#include "ransac.h"
-#include "utils.h"
-#include "viewer.h"
+#include "Core/frame.h"
+#include "Drawer/pointclouddrawer.h"
+#include "Drawer/viewer.h"
+#include "Odometry/generalizedicp.h"
+#include "Odometry/ransac.h"
+#include "Utils/constants.h"
+#include "Utils/converter.h"
+#include "Utils/utils.h"
+#include <algorithm>
 #include <iostream>
 #include <opencv2/core/eigen.hpp>
 #include <opencv2/opencv.hpp>
@@ -50,8 +51,9 @@ int main()
     f << fixed;
     Frame* prevFrame = new Frame();
     cv::Mat imColor, imDepth;
+    vector<float> vResidualStatistics;
 
-    Ransac ransac(200, 20, 3.0f, 4);
+    Ransac ransac(500, 20, 3.0f, 4);
     ransac.CheckDepth(false);
 
     for (size_t i = 0; i < nImages; i += 1) {
@@ -81,9 +83,9 @@ int main()
             Tcw = prevFrame->mTcw * Tcw;
 
             // Display clouds
-            ransac.TransformSourcePointCloud();
-            pCloudDrawer->AssignSourceCloud(ransac.mpTransformedCloud);
-            pCloudDrawer->AssignTargetCloud(ransac.mpTargetInlierCloud);
+            vResidualStatistics.push_back(ransac.TransformSourcePointCloud());
+            pCloudDrawer->UpdateSourceCloud(ransac.mpTransformedCloud);
+            pCloudDrawer->UpdateTargetCloud(ransac.mpTargetInlierCloud);
         }
 
         currFrame->SetPose(Tcw);
@@ -98,6 +100,12 @@ int main()
         delete prevFrame;
         prevFrame = currFrame;
     }
+
+    auto [minIt, maxIt] = std::minmax_element(vResidualStatistics.begin(), vResidualStatistics.end());
+    float sum = std::accumulate(vResidualStatistics.begin(), vResidualStatistics.end(), 0);
+    cout << "Max residual: " << *maxIt << endl;
+    cout << "Min residual: " << *minIt << endl;
+    cout << "Mean residual: " << sum / vResidualStatistics.size() << endl;
 
     f.close();
     cout << "Trajectory saved!" << endl;

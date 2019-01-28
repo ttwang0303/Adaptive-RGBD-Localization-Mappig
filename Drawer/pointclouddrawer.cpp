@@ -53,13 +53,13 @@ void PointCloudDrawer::DrawPointCloud()
     glEnd();
 }
 
-void PointCloudDrawer::AssignSourceCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr pSource)
+void PointCloudDrawer::UpdateSourceCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr pSource)
 {
     unique_lock<mutex> lock(mMutexPointCloud);
     pcl::copyPointCloud(*pSource, *mpSourceCloud);
 }
 
-void PointCloudDrawer::AssignTargetCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr pTarget)
+void PointCloudDrawer::UpdateTargetCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr pTarget)
 {
     unique_lock<mutex> lock(mMutexPointCloud);
     pcl::copyPointCloud(*pTarget, *mpTargetCloud);

@@ -11,9 +11,9 @@ public:
 
     void DrawPointCloud();
 
-    void AssignSourceCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr pSource);
+    void UpdateSourceCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr pSource);
 
-    void AssignTargetCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr pTarget);
+    void UpdateTargetCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr pTarget);
 
 private:
     float mPointSize;
