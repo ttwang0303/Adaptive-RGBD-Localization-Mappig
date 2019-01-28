@@ -8,6 +8,10 @@ const double cx = 318.6;
 const double cy = 255.3;
 
 // -------- FR2 --------
+//const double fx = 520.9;
+//const double fy = 521.0;
+//const double cx = 325.1;
+//const double cy = 249.7;
 
 // -------- FR3 --------
 

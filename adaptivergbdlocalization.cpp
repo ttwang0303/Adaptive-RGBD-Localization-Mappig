@@ -16,7 +16,7 @@ AdaptiveRGBDLocalization::AdaptiveRGBDLocalization()
 {
     srand((long)clock());
 
-    ransac = new Ransac(20, 200, 3.0f, 4);
+    ransac = new Ransac(200, 3.0f, 4);
     icp = new GeneralizedICP(15, 0.05);
 }
 
@@ -31,7 +31,7 @@ AdaptiveRGBDLocalization::AdaptiveRGBDLocalization(const AdaptiveRGBDLocalizatio
 
     switch (mAlgorithm) {
     case RANSAC:
-        ransac = new Ransac(20, 200, 3.0f, 4);
+        ransac = new Ransac(200, 3.0f, 4);
         icp = nullptr;
         break;
 
@@ -41,7 +41,7 @@ AdaptiveRGBDLocalization::AdaptiveRGBDLocalization(const AdaptiveRGBDLocalizatio
         break;
 
     case RANSAC_ICP:
-        ransac = new Ransac(20, 200, 3.0f, 4);
+        ransac = new Ransac(200, 3.0f, 4);
         icp = new GeneralizedICP(15, 0.05);
         break;
     }
@@ -121,10 +121,10 @@ void AdaptiveRGBDLocalization::ComputeAdaptive(Frame* pF1, Frame* pF2, vector<cv
         mStatus = true;
 
         if (rmse * 10.0f > mMiu2) {
-            if (icp->ComputeSubset(pF1, pF2, vMatches12))
+            if (icp->ComputeSubset(pF1, pF2, ransac->GetMatches()))
                 T = icp->GetTransformation();
         } else if (rmse * 10.0f > mMiu1) {
-            if (icp->Compute(pF1, pF2, vMatches12, T))
+            if (icp->Compute(pF1, pF2, ransac->GetMatches(), T))
                 T = icp->GetTransformation();
         }
 

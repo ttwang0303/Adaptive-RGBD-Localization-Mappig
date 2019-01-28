@@ -25,6 +25,9 @@ public:
     cv::Mat desc;
     std::vector<cv::Point3f> kps3Dc;
 
+    // Number of keypoints
+    int N;
+
     // Camera pose.
     cv::Mat mTcw;
 

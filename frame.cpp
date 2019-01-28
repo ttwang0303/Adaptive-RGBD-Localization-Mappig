@@ -41,9 +41,11 @@ void Frame::DetectAndCompute(cv::Ptr<cv::FeatureDetector> pDetector, cv::Ptr<cv:
 
     pDescriptor->compute(im, kps, desc);
 
-    kps3Dc = std::vector<cv::Point3f>(kps.size(), cv::Point3f(0, 0, 0));
+    N = kps.size();
 
-    for (int i = 0; i < kps.size(); ++i) {
+    kps3Dc = vector<cv::Point3f>(N, cv::Point3f(0, 0, 0));
+
+    for (int i = 0; i < N; ++i) {
         const float v = kps[i].pt.y;
         const float u = kps[i].pt.x;
 

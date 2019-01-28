@@ -1,28 +1,45 @@
-#include "adaptivergbdlocalization.h"
+#include "constants.h"
 #include "converter.h"
 #include "frame.h"
 #include "generalizedicp.h"
-#include "ransac.h"
+#include "pointclouddrawer.h"
+#include "ransacpcl.h"
 #include "utils.h"
+#include "viewer.h"
+#include <chrono>
 #include <iostream>
+#include <opencv2/core/eigen.hpp>
 #include <opencv2/opencv.hpp>
 #include <opencv2/xfeatures2d.hpp>
-#include <pcl/common/transforms.h>
-#include <pcl/visualization/pcl_visualizer.h>
+#include <pangolin/pangolin.h>
+#include <thread>
+
+#define CLOUD_VIEWER 1
 
 using namespace std;
+using namespace chrono_literals;
 
-const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset_freiburg1_room/";
+const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset_freiburg1_desk/";
 
 int main()
 {
+    Viewer* pViewer = nullptr;
+    thread* ptViewer = nullptr;
+    PointCloudDrawer* pCloudDrawer = nullptr;
+
+#ifdef CLOUD_VIEWER
+    pCloudDrawer = new PointCloudDrawer();
+    pViewer = new Viewer(pCloudDrawer);
+    ptViewer = new thread(&Viewer::Run, pViewer);
+#endif
+
     vector<string> vImageFilenamesRGB;
     vector<string> vImageFilenamesD;
     vector<double> vTimestamps;
     string associationFilename = string(baseDir + "associations.txt");
     LoadImages(associationFilename, vImageFilenamesRGB, vImageFilenamesD, vTimestamps);
 
-    int nImages = vImageFilenamesRGB.size();
+    size_t nImages = vImageFilenamesRGB.size();
     if (vImageFilenamesRGB.empty()) {
         cerr << "\nNo images found in provided path." << endl;
         return 1;
@@ -35,8 +52,8 @@ int main()
          << "\nImages in the sequence: " << nImages << endl
          << endl;
 
-    cv::Ptr<cv::FeatureDetector> pDetector = cv::xfeatures2d::SURF::create();
-    cv::Ptr<cv::DescriptorExtractor> pDescriptor = cv::ORB::create();
+    cv::Ptr<cv::FeatureDetector> pDetector = cv::ORB::create(1000);
+    cv::Ptr<cv::DescriptorExtractor> pDescriptor = cv::xfeatures2d::BriefDescriptorExtractor::create();
     cv::Ptr<cv::DescriptorMatcher> pMatcher = cv::DescriptorMatcher::create(pDescriptor->defaultNorm());
 
     ofstream f("CameraTrajectory.txt");
@@ -44,9 +61,9 @@ int main()
     Frame* prevFrame = new Frame();
     cv::Mat imColor, imDepth;
 
-    AdaptiveRGBDLocalization odometry(AdaptiveRGBDLocalization::RANSAC_ICP);
+    RansacPCL ransac;
 
-    for (int i = 0; i < nImages; i += 1) {
+    for (size_t i = 0; i < nImages; i += 1) {
         imColor = cv::imread(baseDir + vImageFilenamesRGB[i], cv::IMREAD_COLOR);
         imDepth = cv::imread(baseDir + vImageFilenamesD[i], cv::IMREAD_UNCHANGED);
 
@@ -59,12 +76,21 @@ int main()
         } else {
             // curr -> prev
             vector<cv::DMatch> vMatches12 = Match(currFrame, prevFrame, pMatcher);
-            Tcw = odometry.Compute(currFrame, prevFrame, vMatches12);
-            DrawMatches(currFrame, prevFrame, odometry.ransac->GetMatches());
-            Tcw = prevFrame->mTcw * Tcw;
 
-            if (!odometry.hasConverged())
-                cout << "Fail" << endl;
+            ransac.Iterate(currFrame, prevFrame, vMatches12);
+            vector<cv::DMatch> vInliers12;
+            ransac.GetInliersDMatch(vInliers12);
+            double error = ransac.ResidualError();
+            cout << error << endl;
+
+#ifdef CLOUD_VIEWER
+            pCloudDrawer->AssignSourceCloud(ransac.mpTransformedCloud);
+            pCloudDrawer->AssignTargetCloud(ransac.mpTargetInlierCloud);
+            this_thread::sleep_for(5s);
+#endif
+
+            DrawMatches(currFrame, prevFrame, vInliers12);
+            Tcw = prevFrame->mTcw * Converter::toMat<float, 4, 4>(ransac.mT12);
         }
 
         currFrame->SetPose(Tcw);
@@ -86,15 +112,18 @@ int main()
     f.close();
     cout << "Trajectory saved!" << endl;
 
+#ifdef CLOUD_VIEWER
+    pViewer->RequestFinish();
+    while (!pViewer->isFinished())
+        usleep(5000);
+
+    pangolin::BindToContext("Cloud Viewer");
+
+    delete pCloudDrawer;
+    delete pViewer;
+    delete ptViewer;
+
+#endif
+
     return 0;
 }
-
-// pcl::visualization::PCLVisualizer viewer("v");
-/*PointCloud::Ptr out(new PointCloud);
-pcl::transformPointCloud(*prevFrame->cloud, *out, T);
-
-viewer.removePointCloud("tgt");
-viewer.removePointCloud("trans");
-viewer.addPointCloud(currFrame->cloud, "tgt");
-viewer.addPointCloud(out, "trans");
-viewer.spinOnce();*/

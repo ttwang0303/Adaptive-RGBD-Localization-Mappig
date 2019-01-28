@@ -29,7 +29,9 @@ public:
 
     void SetMaximumIterations(int iters);
 
-    void setMaxCorrespondenceDistance(double dist);
+    void SetMaxCorrespondenceDistance(double dist);
+
+    void SetEuclideanFitnessEpsilon(double epsilon);
 
 private:
     void CreateCloudsFromMatches(const Frame* pF1, const Frame* pF2, const std::vector<cv::DMatch>& vMatches12, const Eigen::Matrix4f& T12, const bool& calcDist = false);

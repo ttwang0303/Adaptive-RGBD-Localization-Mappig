@@ -11,7 +11,7 @@ class Ransac {
 public:
     Ransac();
 
-    Ransac(uint minInlierTh, int iters, float maxMahalanobisDist, uint sampleSize);
+    Ransac(int iters, float maxMahalanobisDist, uint sampleSize);
 
     ~Ransac() {}
 
@@ -19,12 +19,10 @@ public:
     // between the state pF1 and pF2 (pF1 -->[T12]--> pF2)
     bool Compute(Frame* pF1, Frame* pF2, std::vector<cv::DMatch>& m12);
 
-    void SetMinInlierTh(uint minInlierTh);
     void SetIterations(int iters);
     void SetMaxMahalanobisDistance(float dist);
     void SetSampleSize(uint sampleSize);
 
-    uint GetMinInlierTh() const;
     int GetIterations() const;
     float GetMaxMahalanobisDistance() const;
     uint GetSampleSize() const;
@@ -50,7 +48,6 @@ private:
     double DepthStdDev(double depth);
 
     // Ransac parameters
-    uint mMinInlierTh;
     int mIterations;
     float mMaxMahalanobisDistance;
     uint mSampleSize;

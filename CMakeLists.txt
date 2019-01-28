@@ -6,6 +6,26 @@ set(CMAKE_CXX_STANDARD 17)
 set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -march=native -O3 -pthread" )
 
 #------------------------------------------
+#                    G2O
+#------------------------------------------
+list( APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules )
+find_package( G2O REQUIRED )
+include_directories(${G2O_INCLUDE_DIR})
+find_package( Cholmod )
+include_directories(${CHOLMOD_INCLUDE_DIR})
+find_package(CSparse)
+include_directories(${CSPARSE_INCLUDE_DIR})
+list(APPEND G2O_LIBS
+  g2o_cli g2o_ext_freeglut_minimal g2o_simulator
+  g2o_solver_slam2d_linear g2o_types_icp g2o_types_slam2d
+  g2o_core g2o_interface g2o_solver_csparse g2o_solver_structure_only
+  g2o_types_sba g2o_types_slam3d g2o_csparse_extension
+  g2o_opengl_helper g2o_solver_dense g2o_stuff
+  g2o_types_sclam2d g2o_parser g2o_solver_pcg
+  g2o_types_data g2o_types_sim3
+)
+
+#------------------------------------------
 #                    Boost
 #------------------------------------------
 FIND_PACKAGE( Boost REQUIRED )
@@ -31,6 +51,12 @@ add_definitions(${PCL_DEFINITIONS})
 include_directories(${PCL_INCLUDE_DIRS})
 link_libraries(${PCL_LIBRARY_DIRS})
 
+#------------------------------------------
+#                    Pangolin
+#------------------------------------------
+find_package(Pangolin REQUIRED)
+include_directories(${Pangolin_INCLUDE_DIRS})
+
 
 include_directories(${PROJECT_SOURCE_DIR})
 
@@ -41,13 +67,21 @@ ransac.cpp
 generalizedicp.cpp
 adaptivergbdlocalization.cpp
 frame.cpp
+pointtopointicp.cpp
+ransacpcl.cpp
+viewer.cpp
+pointclouddrawer.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}
     ${PCL_LIBRARIES}
     ${OpenCV_LIBS}
     ${EIGEN3_LIBS}
-    ${BOOST_LIBRARIES})
+    ${BOOST_LIBRARIES}
+    ${G2O_LIBS}
+    ${CHOLMOD_LIBRARIES}
+    ${CSPARSE_LIBRARY}
+    ${Pangolin_LIBRARIES})
 
 add_executable(main main.cpp)
 target_link_libraries(main ${PROJECT_NAME})

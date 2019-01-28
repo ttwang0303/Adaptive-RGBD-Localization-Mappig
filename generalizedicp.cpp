@@ -21,7 +21,7 @@ GeneralizedICP::GeneralizedICP(int iters, double maxCorrespondenceDist)
 
 bool GeneralizedICP::Compute(const Frame* pF1, const Frame* pF2, const vector<cv::DMatch>& vMatches12, Eigen::Matrix4f& guess)
 {
-    CreateCloudsFromMatches(pF1, pF2, vMatches12, guess, true);
+    CreateCloudsFromMatches(pF1, pF2, vMatches12, guess, false);
     return Align(guess);
 }
 
@@ -60,7 +60,9 @@ double GeneralizedICP::GetScore() const { return mScore; }
 
 void GeneralizedICP::SetMaximumIterations(int iters) { mGicp.setMaximumIterations(iters); }
 
-void GeneralizedICP::setMaxCorrespondenceDistance(double dist) { mGicp.setMaxCorrespondenceDistance(dist); }
+void GeneralizedICP::SetMaxCorrespondenceDistance(double dist) { mGicp.setMaxCorrespondenceDistance(dist); }
+
+void GeneralizedICP::SetEuclideanFitnessEpsilon(double epsilon) { mGicp.setEuclideanFitnessEpsilon(epsilon); }
 
 void GeneralizedICP::CreateCloudsFromMatches(const Frame* pF1, const Frame* pF2, const vector<cv::DMatch>& vMatches12, const Eigen::Matrix4f& T12, const bool& calcDist)
 {
@@ -111,7 +113,7 @@ void GeneralizedICP::CreateCloudsFromMatches(const Frame* pF1, const Frame* pF2,
 
     if (calcDist) {
         double meanDist = dist / mTgtCloud->size();
-        setMaxCorrespondenceDistance(std::min(std::max(0.01, meanDist), 0.09));
+        SetMaxCorrespondenceDistance(std::min(std::max(0.01, meanDist), 0.08));
     }
 }
 

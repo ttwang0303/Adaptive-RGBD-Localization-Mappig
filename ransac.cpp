@@ -5,13 +5,12 @@
 using namespace std;
 
 Ransac::Ransac()
-    : Ransac(20, 200, 3.0f, 4)
+    : Ransac(200, 3.0f, 4)
 {
 }
 
-Ransac::Ransac(uint minInlierTh, int iters, float maxMahalanobisDist, uint sampleSize)
-    : mMinInlierTh(minInlierTh)
-    , mIterations(iters)
+Ransac::Ransac(int iters, float maxMahalanobisDist, uint sampleSize)
+    : mIterations(iters)
     , mMaxMahalanobisDistance(maxMahalanobisDist)
     , mSampleSize(sampleSize)
 {
@@ -19,14 +18,15 @@ Ransac::Ransac(uint minInlierTh, int iters, float maxMahalanobisDist, uint sampl
 
 bool Ransac::Compute(Frame* pF1, Frame* pF2, vector<cv::DMatch>& m12)
 {
-    if (m12.size() < mMinInlierTh)
+    if (m12.size() < 20)
         return false;
 
-    uint minInlierTh;
-    if (mMinInlierTh > 0.75 * m12.size())
-        minInlierTh = 0.75 * m12.size();
-    else
-        minInlierTh = mMinInlierTh;
+//    uint minInlierTh = 0.3 * m12.size();
+    uint minInlierTh = 20;
+    //    if (mMinInlierTh > 0.75 * m12.size())
+    //        minInlierTh = 0.75 * m12.size();
+    //    else
+    //        minInlierTh = mMinInlierTh;
 
     mvMatches.clear();
     rmse = 1e6;
@@ -102,8 +102,9 @@ bool Ransac::Compute(Frame* pF1, Frame* pF2, vector<cv::DMatch>& m12)
         }
     }
 
-    bool enoughAbsolute = mvMatches.size() >= minInlierTh;
-    return enoughAbsolute;
+    bool c1 = mvMatches.size() >= minInlierTh;
+    bool c2 = mvMatches.size() >= 20;
+    return c1 & c2;
 }
 
 vector<cv::DMatch> Ransac::SampleMatches(const vector<cv::DMatch>& vMatches)
@@ -276,15 +277,11 @@ Eigen::Matrix4f Ransac::GetTransformation() const { return mTransformation; }
 
 float Ransac::GetRMSE() const { return rmse; }
 
-void Ransac::SetMinInlierTh(uint minInlierTh) { mMinInlierTh = minInlierTh; }
-
 void Ransac::SetIterations(int iters) { mIterations = iters; }
 
 void Ransac::SetMaxMahalanobisDistance(float dist) { mMaxMahalanobisDistance = dist; }
 
 void Ransac::SetSampleSize(uint sampleSize) { mSampleSize = sampleSize; }
-
-uint Ransac::GetMinInlierTh() const { return mMinInlierTh; }
 
 int Ransac::GetIterations() const { return mIterations; }
 
