@@ -3,9 +3,10 @@
 #include "frame.h"
 #include "generalizedicp.h"
 #include "pointclouddrawer.h"
-#include "ransac.h"
+#include "ransacpcl.h"
 #include "utils.h"
 #include "viewer.h"
+#include <chrono>
 #include <iostream>
 #include <opencv2/core/eigen.hpp>
 #include <opencv2/opencv.hpp>
@@ -14,14 +15,22 @@
 #include <thread>
 
 using namespace std;
+using namespace chrono_literals;
 
 const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset_freiburg1_room/";
 
 int main()
 {
-    PointCloudDrawer* pCloudDrawer = new PointCloudDrawer();
-    Viewer* pViewer = new Viewer(pCloudDrawer);
-    thread* ptViewer = new thread(&Viewer::Run, pViewer);
+    const bool CLOUD_VIEWER = false;
+    Viewer* pViewer = nullptr;
+    thread* ptViewer = nullptr;
+    PointCloudDrawer* pCloudDrawer = nullptr;
+
+    if (CLOUD_VIEWER) {
+        pCloudDrawer = new PointCloudDrawer();
+        pViewer = new Viewer(pCloudDrawer);
+        ptViewer = new thread(&Viewer::Run, pViewer);
+    }
 
     vector<string> vImageFilenamesRGB;
     vector<string> vImageFilenamesD;
@@ -46,13 +55,13 @@ int main()
     cv::Ptr<cv::DescriptorExtractor> pDescriptor = cv::ORB::create();
     cv::Ptr<cv::DescriptorMatcher> pMatcher = cv::DescriptorMatcher::create(pDescriptor->defaultNorm());
 
+    RansacPCL ransac;
+    GeneralizedICP icp(15, 0.05);
+
     ofstream f("CameraTrajectory.txt");
     f << fixed;
     Frame* prevFrame = new Frame();
     cv::Mat imColor, imDepth;
-
-    Ransac ransac(200, 20, 3.0f, 4);
-    ransac.CheckDepth(false);
 
     for (size_t i = 0; i < nImages; i += 1) {
         imColor = cv::imread(baseDir + vImageFilenamesRGB[i], cv::IMREAD_COLOR);
@@ -71,19 +80,25 @@ int main()
             // Run RANSAC
             ransac.Iterate(currFrame, prevFrame, vMatches12);
 
-            // Draw Inliers matches
-            DrawMatches(currFrame, prevFrame, ransac.mvInliers);
+            // Get Inliers matches
+            vector<cv::DMatch> vInliers12;
+            ransac.GetInliersDMatch(vInliers12);
+            DrawMatches(currFrame, prevFrame, vInliers12);
 
-            // Get transformation estimation
+            // Calculate residual error
+            double error = ransac.ResidualError();
             Tcw = Converter::toMat<float, 4, 4>(ransac.mT12);
 
-            // Update pose
-            Tcw = prevFrame->mTcw * Tcw;
+            // Refine with ICP
+            if (icp.Compute(ransac.mpTransformedCloud, ransac.mpTargetInlierCloud, ransac.mT12, true))
+                Tcw = Converter::toMat<float, 4, 4>(icp.mT12);
 
-            // Display clouds
-            ransac.TransformSourcePointCloud();
-            pCloudDrawer->AssignSourceCloud(ransac.mpTransformedCloud);
-            pCloudDrawer->AssignTargetCloud(ransac.mpTargetInlierCloud);
+            if (CLOUD_VIEWER) {
+                pCloudDrawer->AssignSourceCloud(ransac.mpTransformedCloud);
+                pCloudDrawer->AssignTargetCloud(ransac.mpTargetInlierCloud);
+            }
+
+            Tcw = prevFrame->mTcw * Tcw;
         }
 
         currFrame->SetPose(Tcw);
@@ -102,11 +117,13 @@ int main()
     f.close();
     cout << "Trajectory saved!" << endl;
 
-    pViewer->RequestFinish();
-    while (!pViewer->isFinished())
-        usleep(5000);
+    if (CLOUD_VIEWER) {
+        pViewer->RequestFinish();
+        while (!pViewer->isFinished())
+            usleep(5000);
 
-    pangolin::BindToContext("Cloud Viewer");
+        pangolin::BindToContext("Cloud Viewer");
+    }
 
     return 0;
 }

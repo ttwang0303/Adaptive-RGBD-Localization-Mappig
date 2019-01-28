@@ -19,7 +19,7 @@ public:
 
     void GetInliersDMatch(std::vector<cv::DMatch>& vInliers);
 
-    double ResidualError();
+    float ResidualError();
 
     void SetInlierThreshold(double thresh);
 

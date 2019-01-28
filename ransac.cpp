@@ -1,59 +1,103 @@
 #include "ransac.h"
 #include "frame.h"
+#include <boost/make_shared.hpp>
 #include <pcl/common/transformation_from_correspondences.h>
 
 using namespace std;
 
 Ransac::Ransac()
-    : Ransac(200, 3.0f, 4)
+    : Ransac(200, 20, 3.0f, 4)
 {
 }
 
-Ransac::Ransac(int iters, float maxMahalanobisDist, uint sampleSize)
+Ransac::Ransac(int iters, uint minInlierTh, float maxMahalanobisDist, uint sampleSize)
     : mIterations(iters)
+    , mMinInlierTh(minInlierTh)
     , mMaxMahalanobisDistance(maxMahalanobisDist)
     , mSampleSize(sampleSize)
+    , mCheckDepth(true)
 {
+    srand((long)clock());
+
+    mpSourceCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+    mpTargetCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+    mpTransformedCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+    mpSourceInlierCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+    mpTargetInlierCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
 }
 
-bool Ransac::Compute(Frame* pF1, Frame* pF2, vector<cv::DMatch>& m12)
+bool Ransac::Iterate(Frame* pF1, Frame* pF2, const vector<cv::DMatch>& m12)
 {
-    if (m12.size() < 20)
+    mvInliers.clear();
+    rmse = 1e6;
+    mT12 = Eigen::Matrix4f::Identity();
+
+    mpSourceCloud->points.clear();
+    mpTargetCloud->points.clear();
+    mpTransformedCloud->points.clear();
+    mpSourceInlierCloud->points.clear();
+    mpTargetInlierCloud->points.clear();
+
+    mpSourceFrame = pF1;
+    mpTargetFrame = pF2;
+
+    if (m12.size() < mMinInlierTh)
         return false;
 
-//    uint minInlierTh = 0.3 * m12.size();
-    uint minInlierTh = 20;
-    //    if (mMinInlierTh > 0.75 * m12.size())
-    //        minInlierTh = 0.75 * m12.size();
-    //    else
-    //        minInlierTh = mMinInlierTh;
+    vector<cv::DMatch> vGoodMatches;
+    vGoodMatches.reserve(m12.size());
 
-    mvMatches.clear();
-    rmse = 1e6;
-    mTransformation = Eigen::Matrix4f::Identity();
+    if (mCheckDepth) {
+        for (const auto& m : m12) {
+            const cv::Point3f& source = mpSourceFrame->kps3Dc[m.queryIdx];
+            const cv::Point3f& target = mpTargetFrame->kps3Dc[m.trainIdx];
+
+            if (isnan(source.z) || isnan(target.z))
+                continue;
+            if (source.z <= 0 || target.z <= 0)
+                continue;
+
+            vGoodMatches.push_back(m);
+            mpSourceCloud->points.push_back(pcl::PointXYZ(source.x, source.y, source.z));
+            mpTargetCloud->points.push_back(pcl::PointXYZ(target.x, target.y, target.z));
+        }
+    } else {
+        for (const auto& m : m12) {
+            const cv::Point3f& source = mpSourceFrame->kps3Dc[m.queryIdx];
+            const cv::Point3f& target = mpTargetFrame->kps3Dc[m.trainIdx];
+
+            vGoodMatches.push_back(m);
+            mpSourceCloud->points.push_back(pcl::PointXYZ(source.x, source.y, source.z));
+            mpTargetCloud->points.push_back(pcl::PointXYZ(target.x, target.y, target.z));
+        }
+    }
+
+    if (vGoodMatches.size() < mMinInlierTh)
+        return false;
+
     bool validTf = false;
     int realIters = 0;
     int validIters = 0;
     double inlierError;
 
-    sort(m12.begin(), m12.end());
+    sort(vGoodMatches.begin(), vGoodMatches.end());
 
-    for (int n = 0; (n < mIterations && m12.size() >= mSampleSize); n++) {
+    for (int n = 0; (n < mIterations && vGoodMatches.size() >= mSampleSize); n++) {
         double refinedError = 1e6;
         vector<cv::DMatch> vRefinedMatches;
-        vector<cv::DMatch> vInlierMatches = SampleMatches(m12);
+        vector<cv::DMatch> vInlierMatches = SampleMatches(vGoodMatches);
         Eigen::Matrix4f refinedTransformation = Eigen::Matrix4f::Identity();
         realIters++;
 
         for (int refinements = 1; refinements < 20; refinements++) {
-            Eigen::Matrix4f transformation = GetTransformFromMatches(pF1, pF2, vInlierMatches, validTf);
+            Eigen::Matrix4f transformation = GetTransformFromMatches(vInlierMatches, validTf);
 
             if (!validTf && transformation != transformation)
                 break;
 
-            inlierError = ComputeInliersAndError(pF1, pF2, m12, transformation, vInlierMatches);
+            inlierError = ComputeInliersAndError(vGoodMatches, transformation, vInlierMatches);
 
-            if (vInlierMatches.size() < minInlierTh || inlierError > mMaxMahalanobisDistance)
+            if (vInlierMatches.size() < mMinInlierTh || inlierError > mMaxMahalanobisDistance)
                 break;
 
             if (vInlierMatches.size() >= vRefinedMatches.size() && inlierError <= refinedError) {
@@ -73,16 +117,17 @@ bool Ransac::Compute(Frame* pF1, Frame* pF2, vector<cv::DMatch>& m12)
         if (vRefinedMatches.size() > 0) {
             validIters++;
 
-            if (refinedError <= rmse && vRefinedMatches.size() >= mvMatches.size() && vRefinedMatches.size() >= minInlierTh) {
+            if (refinedError <= rmse && vRefinedMatches.size() >= mvInliers.size()
+                && vRefinedMatches.size() >= mMinInlierTh) {
                 rmse = refinedError;
-                mTransformation = refinedTransformation;
-                mvMatches.assign(vRefinedMatches.begin(), vRefinedMatches.end());
+                mT12 = refinedTransformation;
+                mvInliers.assign(vRefinedMatches.begin(), vRefinedMatches.end());
 
-                if (vRefinedMatches.size() > m12.size() * 0.5)
+                if (vRefinedMatches.size() > vGoodMatches.size() * 0.5)
                     n += 10;
-                if (vRefinedMatches.size() > m12.size() * 0.75)
+                if (vRefinedMatches.size() > vGoodMatches.size() * 0.75)
                     n += 10;
-                if (vRefinedMatches.size() > m12.size() * 0.8)
+                if (vRefinedMatches.size() > vGoodMatches.size() * 0.8)
                     break;
             }
         }
@@ -91,20 +136,48 @@ bool Ransac::Compute(Frame* pF1, Frame* pF2, vector<cv::DMatch>& m12)
     if (validIters == 0) {
         Eigen::Matrix4f transformation = Eigen::Matrix4f::Identity();
         vector<cv::DMatch> vInlierMatches;
-        inlierError = ComputeInliersAndError(pF1, pF2, m12, transformation, vInlierMatches);
+        inlierError = ComputeInliersAndError(vGoodMatches, transformation, vInlierMatches);
 
-        if (vInlierMatches.size() > minInlierTh && inlierError < mMaxMahalanobisDistance) {
+        if (vInlierMatches.size() > mMinInlierTh && inlierError < mMaxMahalanobisDistance) {
             assert(inlierError >= 0);
-            mTransformation = transformation;
-            mvMatches.assign(vInlierMatches.begin(), vInlierMatches.end());
+            mT12 = transformation;
+            mvInliers.assign(vInlierMatches.begin(), vInlierMatches.end());
             rmse += inlierError;
             validIters++;
         }
     }
 
-    bool c1 = mvMatches.size() >= minInlierTh;
-    bool c2 = mvMatches.size() >= 20;
-    return c1 & c2;
+    return mvInliers.size() >= mMinInlierTh;
+}
+
+float Ransac::TransformSourcePointCloud()
+{
+    size_t N = mvInliers.size();
+    float d = 0.0f;
+    Eigen::Matrix3f R12 = mT12.block(0, 0, 3, 3);
+    Eigen::Vector3f t12(mT12(0, 3), mT12(1, 3), mT12(2, 3));
+
+    mpTransformedCloud->points.reserve(N);
+    mpSourceInlierCloud->points.reserve(N);
+    mpTargetInlierCloud->points.reserve(N);
+
+    for (const auto& m : mvInliers) {
+        const cv::Point3f& srcPoint = mpSourceFrame->kps3Dc[m.queryIdx];
+        const cv::Point3f& tgtPoint = mpTargetFrame->kps3Dc[m.trainIdx];
+
+        mpSourceInlierCloud->points.push_back(pcl::PointXYZ(srcPoint.x, srcPoint.y, srcPoint.z));
+        mpTargetInlierCloud->points.push_back(pcl::PointXYZ(tgtPoint.x, tgtPoint.y, tgtPoint.z));
+
+        Eigen::Vector3f src(srcPoint.x, srcPoint.y, srcPoint.z);
+        Eigen::Vector3f tgt(tgtPoint.x, tgtPoint.y, tgtPoint.z);
+
+        Eigen::Vector3f trans = R12 * src + t12;
+        mpTransformedCloud->points.push_back(pcl::PointXYZ(trans.x(), trans.y(), trans.z()));
+
+        d += (trans - tgt).norm();
+    }
+
+    return d / N;
 }
 
 vector<cv::DMatch> Ransac::SampleMatches(const vector<cv::DMatch>& vMatches)
@@ -133,27 +206,27 @@ vector<cv::DMatch> Ransac::SampleMatches(const vector<cv::DMatch>& vMatches)
     return vSampledMatches;
 }
 
-Eigen::Matrix4f Ransac::GetTransformFromMatches(const Frame* pF1, const Frame* pF2, const std::vector<cv::DMatch>& vMatches, bool& valid)
+Eigen::Matrix4f Ransac::GetTransformFromMatches(const std::vector<cv::DMatch>& vMatches, bool& valid)
 {
     pcl::TransformationFromCorrespondences tfc;
     valid = true;
     float weight = 1.0;
 
     for (const auto& m : vMatches) {
-        const cv::Point3f& from = pF1->kps3Dc[m.queryIdx];
-        const cv::Point3f& to = pF2->kps3Dc[m.trainIdx];
+        const cv::Point3f& from = mpSourceFrame->kps3Dc[m.queryIdx];
+        const cv::Point3f& to = mpTargetFrame->kps3Dc[m.trainIdx];
 
         if (isnan(from.z) || isnan(to.z))
             continue;
 
-        weight = 1.0 / (from.z * to.z);
+        weight = 1.0f / (from.z * to.z);
         tfc.add(Eigen::Vector3f(from.x, from.y, from.z), Eigen::Vector3f(to.x, to.y, to.z), weight);
     }
 
     return tfc.getTransformation().matrix();
 }
 
-double Ransac::ComputeInliersAndError(const Frame* pF1, const Frame* pF2, const std::vector<cv::DMatch>& m12, const Eigen::Matrix4f& transformation4f, std::vector<cv::DMatch>& vInlierMatches)
+double Ransac::ComputeInliersAndError(const std::vector<cv::DMatch>& m12, const Eigen::Matrix4f& transformation4f, std::vector<cv::DMatch>& vInlierMatches)
 {
     vInlierMatches.clear();
     vInlierMatches.reserve(m12.size());
@@ -161,8 +234,8 @@ double Ransac::ComputeInliersAndError(const Frame* pF1, const Frame* pF2, const 
     Eigen::Matrix4d transformation4d = transformation4f.cast<double>();
 
     for (const auto& m : m12) {
-        const cv::Point3f& origin = pF1->kps3Dc[m.queryIdx];
-        const cv::Point3f& target = pF2->kps3Dc[m.trainIdx];
+        const cv::Point3f& origin = mpSourceFrame->kps3Dc[m.queryIdx];
+        const cv::Point3f& target = mpTargetFrame->kps3Dc[m.trainIdx];
 
         if (origin.z == 0.0f || target.x == 0.0f)
             continue;
@@ -271,20 +344,12 @@ double Ransac::DepthStdDev(double depth)
     return depth_std_dev * depth * depth;
 }
 
-const std::vector<cv::DMatch>& Ransac::GetMatches() const { return mvMatches; }
-
-Eigen::Matrix4f Ransac::GetTransformation() const { return mTransformation; }
-
-float Ransac::GetRMSE() const { return rmse; }
-
 void Ransac::SetIterations(int iters) { mIterations = iters; }
 
 void Ransac::SetMaxMahalanobisDistance(float dist) { mMaxMahalanobisDistance = dist; }
 
 void Ransac::SetSampleSize(uint sampleSize) { mSampleSize = sampleSize; }
 
-int Ransac::GetIterations() const { return mIterations; }
+void Ransac::SetInlierThreshold(uint th) { mMinInlierTh = th; }
 
-float Ransac::GetMaxMahalanobisDistance() const { return mMaxMahalanobisDistance; }
-
-uint Ransac::GetSampleSize() const { return mSampleSize; }
+void Ransac::CheckDepth(bool check) { mCheckDepth = check; }

@@ -19,13 +19,11 @@ public:
     // between the state pF1 and pF2 (pF1 -->[T12]--> pF2)
     bool Compute(const Frame* pF1, const Frame* pF2, const std::vector<cv::DMatch>& vMatches12, Eigen::Matrix4f& guess);
 
+    bool Compute(const pcl::PointCloud<pcl::PointXYZ>::Ptr pSourceCloud, const pcl::PointCloud<pcl::PointXYZ>::Ptr pTargetCloud, const Eigen::Matrix4f& guess, const bool isSourceTransformed = false);
+
     bool ComputeSubset(const Frame* pF1, const Frame* pF2, const std::vector<cv::DMatch>& vMatches12);
 
-    bool Align(const Eigen::Matrix4f& guess);
-
-    Eigen::Matrix4f GetTransformation() const;
-
-    double GetScore() const;
+    bool Align(const Eigen::Matrix4f& guess, const bool isSourceTransformed = false);
 
     void SetMaximumIterations(int iters);
 
@@ -39,10 +37,11 @@ private:
     std::vector<cv::DMatch> GetSubset(const std::vector<cv::DMatch>& vMatches12);
 
     pcl::GeneralizedIterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> mGicp;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr mSrcCloud;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr mTgtCloud;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr mpSourceCloud;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr mpTargetCloud;
 
-    Eigen::Matrix4f mTransformation;
+public:
+    Eigen::Matrix4f mT12;
     double mScore;
 };
 

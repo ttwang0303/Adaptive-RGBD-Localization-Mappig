@@ -7,11 +7,9 @@ using namespace std;
 
 RansacPCL::RansacPCL()
 {
-    srand((long)clock());
-
     mpSampleConsensus = boost::make_shared<pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointXYZ>>();
     mpSampleConsensus->setInlierThreshold(0.05);
-    mpSampleConsensus->setMaximumIterations(1000);
+    mpSampleConsensus->setMaximumIterations(500);
     mpSampleConsensus->setRefineModel(true);
 
     mpSourceCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
@@ -66,14 +64,6 @@ void RansacPCL::CreateCloudFromMatches(const Frame* pF1, const Frame* pF2, const
         mvDMatches.push_back(m);
         idx++;
     }
-
-    //    mpSourceCloud->height = 1;
-    //    mpSourceCloud->width = mpSourceCloud->points.size();
-    //    mpSourceCloud->is_dense = false;
-
-    //    mpTargetCloud->height = 1;
-    //    mpTargetCloud->width = mpTargetCloud->points.size();
-    //    mpTargetCloud->is_dense = false;
 }
 
 void RansacPCL::GetInliersDMatch(std::vector<cv::DMatch>& vInliers)
@@ -87,10 +77,10 @@ void RansacPCL::GetInliersDMatch(std::vector<cv::DMatch>& vInliers)
     }
 }
 
-double RansacPCL::ResidualError()
+float RansacPCL::ResidualError()
 {
     size_t N = mInliersCorrespondences.size();
-    double d = 0.0;
+    float d = 0.0;
     Eigen::Matrix3f R12 = mT12.block(0, 0, 3, 3);
     Eigen::Vector3f t12(mT12(0, 3), mT12(1, 3), mT12(2, 3));
 
@@ -111,7 +101,7 @@ double RansacPCL::ResidualError()
         Eigen::Vector3f trans = R12 * src + t12;
         mpTransformedCloud->points.push_back(pcl::PointXYZ(trans.x(), trans.y(), trans.z()));
 
-        d += (trans - tgt).cast<double>().norm();
+        d += (trans - tgt).norm();
     }
 
     return d / N;

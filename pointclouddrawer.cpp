@@ -39,7 +39,7 @@ void PointCloudDrawer::DrawPointCloud()
 
         glEnd();
 
-        // Draw connecor
+        // Draw connector
         glLineWidth(mLineWidth);
         glColor3f(0.0f, 0.75f, 0.0f);
         glBegin(GL_LINES);
