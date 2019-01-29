@@ -52,8 +52,8 @@ Eigen::Matrix4f PointToPointICP::Compute(const Frame* srcFrame, const Frame* tgt
         edge->setVertex(0, tgtVertex);
         edge->setVertex(1, srcVertex);
 
-        cv::Point3f srcPc = srcFrame->kps3Dc[m.queryIdx];
-        cv::Point3f tgtPc = tgtFrame->kps3Dc[m.trainIdx];
+        cv::Point3f srcPc = srcFrame->mvKps3Dc[m.queryIdx];
+        cv::Point3f tgtPc = tgtFrame->mvKps3Dc[m.trainIdx];
 
         g2o::EdgeGICP measurement;
         measurement.pos0 = Eigen::Vector3d(tgtPc.x, tgtPc.y, tgtPc.z);

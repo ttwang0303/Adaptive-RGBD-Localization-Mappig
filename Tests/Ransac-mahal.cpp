@@ -1,11 +1,13 @@
-#include "constants.h"
-#include "converter.h"
-#include "frame.h"
-#include "generalizedicp.h"
-#include "pointclouddrawer.h"
-#include "ransac.h"
-#include "utils.h"
-#include "viewer.h"
+#include "Core/frame.h"
+#include "Drawer/pointclouddrawer.h"
+#include "Drawer/viewer.h"
+#include "Odometry/generalizedicp.h"
+#include "Odometry/ransac.h"
+#include "Utils/constants.h"
+#include "Utils/converter.h"
+#include "Utils/utils.h"
+#include <algorithm>
+#include <chrono>
 #include <iostream>
 #include <opencv2/core/eigen.hpp>
 #include <opencv2/opencv.hpp>
@@ -14,6 +16,7 @@
 #include <thread>
 
 using namespace std;
+using namespace chrono_literals;
 
 const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset_freiburg1_room/";
 
@@ -48,13 +51,14 @@ int main()
 
     ofstream f("CameraTrajectory.txt");
     f << fixed;
-    Frame* prevFrame = new Frame();
+    Frame* prevFrame = nullptr;
     cv::Mat imColor, imDepth;
+    vector<float> vResidualStatistics;
 
-    Ransac ransac(200, 20, 3.0f, 4);
+    Ransac ransac(500, 20, 3.0f, 4);
     ransac.CheckDepth(false);
 
-    for (size_t i = 0; i < nImages; i += 1) {
+    for (size_t i = 0; i < nImages; i += 3) {
         imColor = cv::imread(baseDir + vImageFilenamesRGB[i], cv::IMREAD_COLOR);
         imDepth = cv::imread(baseDir + vImageFilenamesD[i], cv::IMREAD_UNCHANGED);
 
@@ -81,9 +85,10 @@ int main()
             Tcw = prevFrame->mTcw * Tcw;
 
             // Display clouds
-            ransac.TransformSourcePointCloud();
-            pCloudDrawer->AssignSourceCloud(ransac.mpTransformedCloud);
-            pCloudDrawer->AssignTargetCloud(ransac.mpTargetInlierCloud);
+            vResidualStatistics.push_back(ransac.TransformSourcePointCloud());
+            pCloudDrawer->UpdateSourceCloud(ransac.mpTransformedCloud);
+            pCloudDrawer->UpdateTargetCloud(ransac.mpTargetInlierCloud);
+            this_thread::sleep_for(1s);
         }
 
         currFrame->SetPose(Tcw);
@@ -92,12 +97,20 @@ int main()
         const cv::Mat& R = currFrame->mRcw;
         vector<float> q = Converter::toQuaternion(R);
         const cv::Mat& t = currFrame->mtcw;
-        f << setprecision(6) << currFrame->timestamp << setprecision(7) << " " << t.at<float>(0) << " " << t.at<float>(1) << " " << t.at<float>(2)
+        f << setprecision(6) << currFrame->mTimestamp << setprecision(7) << " " << t.at<float>(0) << " " << t.at<float>(1) << " " << t.at<float>(2)
           << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl;
 
-        delete prevFrame;
+        if (prevFrame)
+            delete prevFrame;
+
         prevFrame = currFrame;
     }
+
+    auto [minIt, maxIt] = std::minmax_element(vResidualStatistics.begin(), vResidualStatistics.end());
+    float sum = std::accumulate(vResidualStatistics.begin(), vResidualStatistics.end(), 0.0f);
+    cout << "Max residual: " << *maxIt << endl;
+    cout << "Min residual: " << *minIt << endl;
+    cout << "Mean residual: " << sum / static_cast<float>(vResidualStatistics.size()) << endl;
 
     f.close();
     cout << "Trajectory saved!" << endl;

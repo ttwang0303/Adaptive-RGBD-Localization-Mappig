@@ -5,31 +5,46 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
+class Landmark;
+
 class Frame {
 public:
-    Frame();
+    Frame(cv::Mat& imColor, cv::Mat& imDepth, double mTimestamp);
 
-    Frame(cv::Mat& imColor, cv::Mat& imDepth, double timestamp);
+    Frame(cv::Mat& imColor);
 
     void SetPose(cv::Mat& Tcw);
 
     void DetectAndCompute(cv::Ptr<cv::FeatureDetector> pDetector, cv::Ptr<cv::DescriptorExtractor> pDescriptor);
 
+    void Detect(cv::Ptr<cv::FeatureDetector> pDetector);
+
+    void Compute(cv::Ptr<cv::DescriptorExtractor> pDescriptor);
+
     void CreateCloud();
 
+    void AddLandmark(Landmark* pLandmark, const size_t& idx);
+
 public:
-    double timestamp;
-    cv::Mat im, depth;
-    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud;
-    std::vector<cv::KeyPoint> kps;
-    cv::Mat desc;
-    std::vector<cv::Point3f> kps3Dc;
+    cv::Mat mIm, mDepth;
+    double mTimestamp;
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr mpCloud;
+    std::vector<cv::KeyPoint> mvKps;
+    cv::Mat mDescriptors;
+    std::vector<cv::Point3f> mvKps3Dc;
+
+    // Landmark to associated keypoint
+    std::vector<Landmark*> mvpLandmarks;
 
     // Number of keypoints
     int N;
 
     // Camera pose.
     cv::Mat mTcw;
+
+    // Current and Next Frame id.
+    static long unsigned int nNextId;
+    long unsigned int mnId;
 
     // Rotation, translation and camera center
     cv::Mat mRcw;

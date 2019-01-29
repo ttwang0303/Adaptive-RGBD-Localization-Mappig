@@ -69,6 +69,7 @@ Odometry/adaptivergbdlocalization.cpp
 Odometry/pointtopointicp.cpp
 Odometry/ransacpcl.cpp
 Core/frame.cpp
+Core/landmark.cpp
 Drawer/viewer.cpp
 Drawer/pointclouddrawer.cpp
 )

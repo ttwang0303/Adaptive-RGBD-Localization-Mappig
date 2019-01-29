@@ -49,8 +49,8 @@ bool Ransac::Iterate(Frame* pF1, Frame* pF2, const vector<cv::DMatch>& m12)
 
     if (mCheckDepth) {
         for (const auto& m : m12) {
-            const cv::Point3f& source = mpSourceFrame->kps3Dc[m.queryIdx];
-            const cv::Point3f& target = mpTargetFrame->kps3Dc[m.trainIdx];
+            const cv::Point3f& source = mpSourceFrame->mvKps3Dc[m.queryIdx];
+            const cv::Point3f& target = mpTargetFrame->mvKps3Dc[m.trainIdx];
 
             if (isnan(source.z) || isnan(target.z))
                 continue;
@@ -63,8 +63,8 @@ bool Ransac::Iterate(Frame* pF1, Frame* pF2, const vector<cv::DMatch>& m12)
         }
     } else {
         for (const auto& m : m12) {
-            const cv::Point3f& source = mpSourceFrame->kps3Dc[m.queryIdx];
-            const cv::Point3f& target = mpTargetFrame->kps3Dc[m.trainIdx];
+            const cv::Point3f& source = mpSourceFrame->mvKps3Dc[m.queryIdx];
+            const cv::Point3f& target = mpTargetFrame->mvKps3Dc[m.trainIdx];
 
             vGoodMatches.push_back(m);
             mpSourceCloud->points.push_back(pcl::PointXYZ(source.x, source.y, source.z));
@@ -162,8 +162,8 @@ float Ransac::TransformSourcePointCloud()
     mpTargetInlierCloud->points.reserve(N);
 
     for (const auto& m : mvInliers) {
-        const cv::Point3f& srcPoint = mpSourceFrame->kps3Dc[m.queryIdx];
-        const cv::Point3f& tgtPoint = mpTargetFrame->kps3Dc[m.trainIdx];
+        const cv::Point3f& srcPoint = mpSourceFrame->mvKps3Dc[m.queryIdx];
+        const cv::Point3f& tgtPoint = mpTargetFrame->mvKps3Dc[m.trainIdx];
 
         mpSourceInlierCloud->points.push_back(pcl::PointXYZ(srcPoint.x, srcPoint.y, srcPoint.z));
         mpTargetInlierCloud->points.push_back(pcl::PointXYZ(tgtPoint.x, tgtPoint.y, tgtPoint.z));
@@ -213,8 +213,8 @@ Eigen::Matrix4f Ransac::GetTransformFromMatches(const std::vector<cv::DMatch>& v
     float weight = 1.0;
 
     for (const auto& m : vMatches) {
-        const cv::Point3f& from = mpSourceFrame->kps3Dc[m.queryIdx];
-        const cv::Point3f& to = mpTargetFrame->kps3Dc[m.trainIdx];
+        const cv::Point3f& from = mpSourceFrame->mvKps3Dc[m.queryIdx];
+        const cv::Point3f& to = mpTargetFrame->mvKps3Dc[m.trainIdx];
 
         if (isnan(from.z) || isnan(to.z))
             continue;
@@ -234,8 +234,8 @@ double Ransac::ComputeInliersAndError(const std::vector<cv::DMatch>& m12, const 
     Eigen::Matrix4d transformation4d = transformation4f.cast<double>();
 
     for (const auto& m : m12) {
-        const cv::Point3f& origin = mpSourceFrame->kps3Dc[m.queryIdx];
-        const cv::Point3f& target = mpTargetFrame->kps3Dc[m.trainIdx];
+        const cv::Point3f& origin = mpSourceFrame->mvKps3Dc[m.queryIdx];
+        const cv::Point3f& target = mpTargetFrame->mvKps3Dc[m.trainIdx];
 
         if (origin.z == 0.0f || target.x == 0.0f)
             continue;

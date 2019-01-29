@@ -1,25 +1,32 @@
 #include "frame.h"
 #include "Utils/constants.h"
+#include "landmark.h"
+#include <boost/make_shared.hpp>
 #include <pcl/filters/filter.h>
 
 using namespace std;
 
-Frame::Frame()
-    : cloud(new pcl::PointCloud<pcl::PointXYZRGBA>)
-{
-    cv::Mat init = cv::Mat::eye(4, 4, CV_32F);
-    SetPose(init);
-}
+long unsigned int Frame::nNextId = 0;
 
 Frame::Frame(cv::Mat& imColor, cv::Mat& imDepth, double timestamp)
-    : cloud(new pcl::PointCloud<pcl::PointXYZRGBA>)
+    : mIm(imColor)
+    , mTimestamp(timestamp)
+    , mpCloud(nullptr)
 {
-    im = imColor;
-    imDepth.convertTo(depth, CV_32F, depthFactor);
-    this->timestamp = timestamp;
+    // Frame ID
+    mnId = nNextId++;
 
-    cv::Mat init = cv::Mat::eye(4, 4, CV_32F);
-    SetPose(init);
+    imDepth.convertTo(mDepth, CV_32F, depthFactor);
+}
+
+Frame::Frame(cv::Mat& imColor)
+    : mIm(imColor)
+    , mDepth(cv::Mat())
+    , mTimestamp(0)
+    , mpCloud(nullptr)
+{
+    // Frame ID
+    mnId = nNextId++;
 }
 
 void Frame::SetPose(cv::Mat& Tcw)
@@ -35,50 +42,69 @@ void Frame::SetPose(cv::Mat& Tcw)
 
 void Frame::DetectAndCompute(cv::Ptr<cv::FeatureDetector> pDetector, cv::Ptr<cv::DescriptorExtractor> pDescriptor)
 {
-    pDetector->detect(im, kps);
-    if (kps.size() > 1000)
-        cv::KeyPointsFilter::retainBest(kps, 1000);
+    pDetector->detect(mIm, mvKps);
+    if (mvKps.size() > nFeatures)
+        cv::KeyPointsFilter::retainBest(mvKps, nFeatures);
 
-    pDescriptor->compute(im, kps, desc);
+    pDescriptor->compute(mIm, mvKps, mDescriptors);
 
-    N = kps.size();
+    N = mvKps.size();
+    mvpLandmarks = vector<Landmark*>(N, static_cast<Landmark*>(nullptr));
 
-    kps3Dc = vector<cv::Point3f>(N, cv::Point3f(0, 0, 0));
+    //    mvKps3Dc = vector<cv::Point3f>(N, cv::Point3f(0, 0, 0));
 
-    for (int i = 0; i < N; ++i) {
-        const float v = kps[i].pt.y;
-        const float u = kps[i].pt.x;
+    //    for (int i = 0; i < N; ++i) {
+    //        const float v = mvKps[i].pt.y;
+    //        const float u = mvKps[i].pt.x;
 
-        const float z = depth.at<float>(v, u);
-        if (z > 0) {
-            // KeyPoint in Camera coordinates
-            const float x = (u - cx) * z * invfx;
-            const float y = (v - cy) * z * invfy;
-            kps3Dc[i] = cv::Point3f(x, y, z);
-        }
-    }
+    //        const float z = mDepth.at<float>(v, u);
+    //        if (z > 0) {
+    //            // KeyPoint in Camera coordinates
+    //            const float x = (u - cx) * z * invfx;
+    //            const float y = (v - cy) * z * invfy;
+    //            mvKps3Dc[i] = cv::Point3f(x, y, z);
+    //        }
+    //    }
+}
+
+void Frame::Detect(cv::Ptr<cv::FeatureDetector> pDetector)
+{
+    pDetector->detect(mIm, mvKps);
+    N = mvKps.size();
+}
+
+void Frame::Compute(cv::Ptr<cv::DescriptorExtractor> pDescriptor)
+{
+    pDescriptor->compute(mIm, mvKps, mDescriptors);
 }
 
 void Frame::CreateCloud()
 {
-    for (int i = 0; i < depth.rows; ++i) {
-        for (int j = 0; j < depth.cols; ++j) {
-            float z = depth.at<float>(i, j);
+    if (mpCloud)
+        return;
+
+    mpCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZRGBA>>();
+
+    for (int i = 0; i < mDepth.rows; ++i) {
+        for (int j = 0; j < mDepth.cols; ++j) {
+            float z = mDepth.at<float>(i, j);
             if (z > 0) {
                 pcl::PointXYZRGBA p;
                 p.z = z;
                 p.x = (j - cx) * z * invfx;
                 p.y = (i - cy) * z * invfy;
 
-                p.b = im.ptr<uchar>(i)[j * 3];
-                p.g = im.ptr<uchar>(i)[j * 3 + 1];
-                p.r = im.ptr<uchar>(i)[j * 3 + 2];
+                p.b = mIm.ptr<uchar>(i)[j * 3];
+                p.g = mIm.ptr<uchar>(i)[j * 3 + 1];
+                p.r = mIm.ptr<uchar>(i)[j * 3 + 2];
 
-                cloud->points.push_back(p);
+                mpCloud->points.push_back(p);
             }
         }
     }
+}
 
-    std::vector<int> indices;
-    pcl::removeNaNFromPointCloud(*cloud, *cloud, indices);
+void Frame::AddLandmark(Landmark* pLandmark, const size_t& idx)
+{
+    mvpLandmarks[idx] = pLandmark;
 }
