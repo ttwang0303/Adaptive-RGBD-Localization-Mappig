@@ -46,7 +46,7 @@ include_directories(${EIGEN3_INCLUDE_DIR})
 #------------------------------------------
 #                    PCL
 #------------------------------------------
-find_package(PCL REQUIRED)
+find_package(PCL REQUIRED COMPONENTS common io registration)
 add_definitions(${PCL_DEFINITIONS})
 include_directories(${PCL_INCLUDE_DIRS})
 link_libraries(${PCL_LIBRARY_DIRS})

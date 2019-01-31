@@ -10,17 +10,17 @@
 
 using namespace std;
 
-const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/Feature_tests/bikes_blur/";
+const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/Feature_tests/wall_viewpoint/";
 
 int main()
 {
     map<string, vector<string>> mCombinationsMap;
-    mCombinationsMap["BRISK"] = { "BRISK", "ORB", "BRIEF", "FREAK", "SURF", "LATCH" };
-    mCombinationsMap["FAST"] = { "BRISK", "ORB", "BRIEF", "FREAK", "SURF", "SIFT", "LATCH" };
-    mCombinationsMap["ORB"] = { "BRISK", "ORB", "BRIEF", "FREAK", "LATCH" };
-    mCombinationsMap["SHI_TOMASI"] = { "BRISK", "ORB", "BRIEF", "FREAK", "SURF", "SIFT", "LATCH" };
-    mCombinationsMap["STAR"] = { "BRISK", "ORB", "BRIEF", "FREAK", "SURF", "LATCH" };
-    mCombinationsMap["SURF"] = { "BRISK", "ORB", "BRIEF", "FREAK" };
+    mCombinationsMap["BRISK"] = { "BRISK", "ORB", "FREAK" };
+    mCombinationsMap["FAST"] = { "SIFT" };
+    mCombinationsMap["ORB"] = { "BRISK", "ORB", "FREAK" };
+    mCombinationsMap["SHI_TOMASI"] = { "BRISK", "ORB", "BRIEF", "FREAK", "SIFT", "LATCH" };
+    mCombinationsMap["STAR"] = { "BRISK", "FREAK", "LATCH" };
+    mCombinationsMap["SURF"] = { "BRISK", "ORB", "FREAK" };
 
     vector<string> vImageFilenamesRGB;
     for (int i = 0; i < 6; ++i) {
@@ -55,7 +55,7 @@ int main()
             cout << "Base KPs: " << pBaseFrame->N << endl;
 
             // Prepare reference Frame
-            imColor = cv::imread(baseDir + vImageFilenamesRGB[3], cv::IMREAD_COLOR);
+            imColor = cv::imread(baseDir + vImageFilenamesRGB[4], cv::IMREAD_COLOR);
             Frame* pReferenceFrame = new Frame(imColor);
             pReferenceFrame->DetectAndCompute(pDetector, pDescriptor);
             cout << "Reference KPs: " << pReferenceFrame->N << endl
@@ -77,4 +77,3 @@ int main()
 
     return 0;
 }
-

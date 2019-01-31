@@ -215,7 +215,7 @@ vector<pair<double, double>> TestRecallPrecision(Frame* pF1, Frame* pF2, cv::Ptr
         cv::Point2f tgt = pF2->mvKps[vMatches12[i].trainIdx].pt;
 
         cv::Point2f srcT = ApplyHomography(src, H);
-        double dist = cv::norm(cv::Vec2f(tgt.x, tgt.y), cv::Vec2f(srcT.x, srcT.y));
+        double dist = cv::norm(cv::Vec2f(srcT.x, srcT.y) - cv::Vec2f(tgt.x, tgt.y));
         vDistances.push_back(dist);
 
         if (dist > maxEuclideanDist)
