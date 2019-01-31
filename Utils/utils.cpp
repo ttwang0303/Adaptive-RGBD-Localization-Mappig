@@ -36,6 +36,7 @@ vector<cv::DMatch> Match(Frame* pF1, Frame* pF2, cv::Ptr<cv::DescriptorMatcher> 
 {
     vector<vector<cv::DMatch>> matchesKnn;
     vector<cv::DMatch> m12;
+    set<int> trainIdxs;
 
     pMatcher->knnMatch(pF1->mDescriptors, pF2->mDescriptors, matchesKnn, 2);
 
@@ -44,6 +45,10 @@ vector<cv::DMatch> Match(Frame* pF1, Frame* pF2, cv::Ptr<cv::DescriptorMatcher> 
         cv::DMatch& m2 = matchesKnn[i][1];
 
         if (m1.distance < 0.9 * m2.distance) {
+            if (trainIdxs.count(m1.trainIdx) > 0)
+                continue;
+
+            trainIdxs.insert(m1.trainIdx);
             m12.push_back(m1);
         }
     }
@@ -116,7 +121,7 @@ cv::Ptr<cv::DescriptorExtractor> CreateDescriptor(const std::string& descriptor)
     return pDescriptor;
 }
 
-bool FindHomography(const Frame* pF1, const Frame* pF2, const vector<cv::DMatch>& vMatches12, cv::Mat& H)
+bool FindHomography(const Frame* pF1, const Frame* pF2, const vector<cv::DMatch>& vMatches12, cv::Mat& H, vector<uchar>& vRansacStatus)
 {
     vector<cv::Point2f> vSourcePoints, vTargetPoints;
     vSourcePoints.reserve(vMatches12.size());
@@ -128,7 +133,9 @@ bool FindHomography(const Frame* pF1, const Frame* pF2, const vector<cv::DMatch>
     }
 
     try {
-        H = cv::findHomography(vSourcePoints, vTargetPoints, CV_RANSAC);
+        vector<uchar> status;
+        H = cv::findHomography(vSourcePoints, vTargetPoints, CV_RANSAC, 4, vRansacStatus, 500, 0.995);
+        //        Mat Fundamental = findFundamentalMat(p1, p2, RansacStatus, FM_RANSAC);
         return true;
     } catch (cv::Exception& ex) {
         return false;
@@ -138,7 +145,8 @@ bool FindHomography(const Frame* pF1, const Frame* pF2, const vector<cv::DMatch>
 cv::Mat DistanceFiler(const Frame* pF1, const Frame* pF2, vector<cv::DMatch>& vMatches12, const double thresh)
 {
     cv::Mat H(3, 3, CV_64F);
-    if (!FindHomography(pF1, pF2, vMatches12, H))
+    vector<uchar> vRansacStatus;
+    if (!FindHomography(pF1, pF2, vMatches12, H, vRansacStatus))
         return cv::Mat();
 
     const auto isOutlier([&pF1, &pF2, &thresh, &H](const cv::DMatch& m12) {
@@ -166,4 +174,79 @@ cv::Point2f ApplyHomography(const cv::Point2f& pt, const cv::Mat& H)
     } else {
         return pt;
     }
+}
+
+vector<pair<double, double>> TestRecallPrecision(Frame* pF1, Frame* pF2, cv::Ptr<cv::DescriptorMatcher> pMatcher, vector<cv::DMatch>& vMatches12)
+{
+    vector<vector<cv::DMatch>> matchesKnn;
+    vector<bool> isMatch;
+
+    pMatcher->knnMatch(pF1->mDescriptors, pF2->mDescriptors, matchesKnn, 2);
+
+    for (size_t i = 0; i < matchesKnn.size(); i++) {
+        cv::DMatch& m1 = matchesKnn[i][0];
+        cv::DMatch& m2 = matchesKnn[i][1];
+
+        if (m1.distance < 0.9 * m2.distance) {
+            isMatch.push_back(true);
+            vMatches12.push_back(m1);
+
+        } else {
+            isMatch.push_back(false);
+            vMatches12.push_back(m1);
+        }
+    }
+
+    vector<pair<double, double>> vDataRP;
+
+    // Calculate Homography matrix
+    vector<uchar> vRansacStatus;
+    cv::Mat H(3, 3, CV_64F);
+    if (!FindHomography(pF1, pF2, vMatches12, H, vRansacStatus)) {
+        vDataRP.push_back({ 0, 0 });
+        return vDataRP;
+    }
+
+    // Calculate maximum Euclidean distance between matches according to Homography
+    vector<double> vDistances;
+    double maxEuclideanDist = 0;
+    for (size_t i = 0; i < vMatches12.size(); i++) {
+        cv::Point2f src = pF1->mvKps[vMatches12[i].queryIdx].pt;
+        cv::Point2f tgt = pF2->mvKps[vMatches12[i].trainIdx].pt;
+
+        cv::Point2f srcT = ApplyHomography(src, H);
+        double dist = cv::norm(cv::Vec2f(tgt.x, tgt.y), cv::Vec2f(srcT.x, srcT.y));
+        vDistances.push_back(dist);
+
+        if (dist > maxEuclideanDist)
+            maxEuclideanDist = dist;
+    }
+
+    // Varying the threshold between what are regarded as a correct and false positives,
+    // different values of recall an precision can be calculated
+    Eigen::ArrayXd threshList = Eigen::ArrayXd::LinSpaced(300, 0.0, maxEuclideanDist + 1.0);
+    for (int i = 0; i < threshList.size(); ++i) {
+        int positives = 0;
+        int negatives = 0;
+        int truePositives = 0;
+        int falsePositives = 0;
+
+        for (size_t j = 0; j < vMatches12.size(); j++) {
+            if (isMatch[j]) {
+                positives++;
+                if (vDistances[j] < threshList(i, 0))
+                    truePositives++;
+            } else {
+                negatives++;
+                if (vDistances[j] < threshList(i, 0))
+                    falsePositives++;
+            }
+        }
+
+        double recall = double(truePositives) / double(positives);
+        double precision = double(falsePositives) / double(negatives);
+        vDataRP.push_back({ recall, precision });
+    }
+
+    return vDataRP;
 }
