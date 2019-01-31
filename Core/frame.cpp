@@ -50,20 +50,20 @@ void Frame::DetectAndCompute(cv::Ptr<cv::FeatureDetector> pDetector, cv::Ptr<cv:
     N = mvKps.size();
     mvpLandmarks = vector<Landmark*>(N, static_cast<Landmark*>(nullptr));
 
-    //    mvKps3Dc = vector<cv::Point3f>(N, cv::Point3f(0, 0, 0));
+    mvKps3Dc = vector<cv::Point3f>(N, cv::Point3f(0, 0, 0));
 
-    //    for (int i = 0; i < N; ++i) {
-    //        const float v = mvKps[i].pt.y;
-    //        const float u = mvKps[i].pt.x;
+    for (int i = 0; i < N; ++i) {
+        const float v = mvKps[i].pt.y;
+        const float u = mvKps[i].pt.x;
 
-    //        const float z = mDepth.at<float>(v, u);
-    //        if (z > 0) {
-    //            // KeyPoint in Camera coordinates
-    //            const float x = (u - cx) * z * invfx;
-    //            const float y = (v - cy) * z * invfy;
-    //            mvKps3Dc[i] = cv::Point3f(x, y, z);
-    //        }
-    //    }
+        const float z = mDepth.at<float>(v, u);
+        if (z > 0) {
+            // KeyPoint in Camera coordinates
+            const float x = (u - cx) * z * invfx;
+            const float y = (v - cy) * z * invfy;
+            mvKps3Dc[i] = cv::Point3f(x, y, z);
+        }
+    }
 }
 
 void Frame::Detect(cv::Ptr<cv::FeatureDetector> pDetector)

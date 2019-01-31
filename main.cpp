@@ -1,16 +1,22 @@
 #include "Core/frame.h"
-#include "Core/landmark.h"
+#include "Drawer/pointclouddrawer.h"
+#include "Drawer/viewer.h"
+#include "Odometry/ransac.h"
+#include "Utils/constants.h"
+#include "Utils/converter.h"
 #include "Utils/utils.h"
 #include <algorithm>
 #include <iostream>
 #include <numeric>
 #include <opencv2/opencv.hpp>
 #include <opencv2/xfeatures2d.hpp>
+#include <pangolin/pangolin.h>
 #include <sstream>
+#include <thread>
 
 using namespace std;
 
-const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/Feature_tests/wall_viewpoint/";
+const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset_freiburg1_desk/";
 
 int main()
 {
@@ -22,58 +28,110 @@ int main()
     mCombinationsMap["STAR"] = { "BRISK", "FREAK", "LATCH" };
     mCombinationsMap["SURF"] = { "BRISK", "ORB", "FREAK" };
 
+    PointCloudDrawer* pCloudDrawer = new PointCloudDrawer();
+    Viewer* pViewer = new Viewer(pCloudDrawer);
+    thread* ptViewer = new thread(&Viewer::Run, pViewer);
+
     vector<string> vImageFilenamesRGB;
-    for (int i = 0; i < 6; ++i) {
-        stringstream ss;
-        ss << "img" << i + 1 << ".ppm";
-        vImageFilenamesRGB.push_back(ss.str());
-    }
+    vector<string> vImageFilenamesD;
+    vector<double> vTimestamps;
+    string associationFilename = string(baseDir + "associations.txt");
+    LoadImages(associationFilename, vImageFilenamesRGB, vImageFilenamesD, vTimestamps);
+
     size_t nImages = vImageFilenamesRGB.size();
+    if (vImageFilenamesRGB.empty()) {
+        cerr << "\nNo images found in provided path." << endl;
+        return 1;
+    } else if (vImageFilenamesD.size() != vImageFilenamesRGB.size()) {
+        cerr << "\nDifferent number of images for rgb and depth." << endl;
+        return 1;
+    }
 
     cout << "Start processing sequence: " << baseDir
          << "\nImages in the sequence: " << nImages << endl
          << endl;
 
-    for (const auto& [detector, vDescriptors] : mCombinationsMap) {
-        cv::Ptr<cv::FeatureDetector> pDetector = CreateDetector(detector);
+    cv::Ptr<cv::FeatureDetector> pDetector = cv::xfeatures2d::SURF::create();
+    cv::Ptr<cv::DescriptorExtractor> pDescriptor = cv::ORB::create();
+    cv::Ptr<cv::DescriptorMatcher> pMatcher = cv::BFMatcher::create(pDescriptor->defaultNorm());
 
-        for (const auto& descriptor : vDescriptors) {
-            cout << detector << "-" << descriptor << endl;
-            cv::Ptr<cv::DescriptorExtractor> pDescriptor = CreateDescriptor(descriptor);
-            cv::Ptr<cv::DescriptorMatcher> pMatcher = cv::BFMatcher::create(pDescriptor->defaultNorm());
+    ofstream f("CameraTrajectory.txt");
+    f << fixed;
+    Frame* prevFrame = nullptr;
+    cv::Mat imColor, imDepth;
+    vector<float> vResidualStatistics;
 
-            cv::Mat imColor;
-            cv::TickMeter tm;
-            stringstream ss;
-            ss << "RP_" << detector << "-" << descriptor << ".csv";
-            ofstream f(ss.str());
+    Ransac ransac(200, 20, 3.0f, 4);
+    ransac.CheckDepth(false);
 
-            // Prepare base Frame
-            imColor = cv::imread(baseDir + vImageFilenamesRGB[0], cv::IMREAD_COLOR);
-            Frame* pBaseFrame = new Frame(imColor);
-            pBaseFrame->DetectAndCompute(pDetector, pDescriptor);
-            cout << "Base KPs: " << pBaseFrame->N << endl;
+    for (size_t i = 0; i < nImages; i += 1) {
+        imColor = cv::imread(baseDir + vImageFilenamesRGB[i], cv::IMREAD_COLOR);
+        imDepth = cv::imread(baseDir + vImageFilenamesD[i], cv::IMREAD_UNCHANGED);
 
-            // Prepare reference Frame
-            imColor = cv::imread(baseDir + vImageFilenamesRGB[4], cv::IMREAD_COLOR);
-            Frame* pReferenceFrame = new Frame(imColor);
-            pReferenceFrame->DetectAndCompute(pDetector, pDescriptor);
-            cout << "Reference KPs: " << pReferenceFrame->N << endl
-                 << endl;
+        Frame* currFrame = new Frame(imColor, imDepth, vTimestamps[i]);
+        currFrame->DetectAndCompute(pDetector, pDescriptor);
 
-            // Recall/Precision test
-            vector<cv::DMatch> vMatchesBR;
-            vector<pair<double, double>> vDataRP = TestRecallPrecision(pBaseFrame, pReferenceFrame, pMatcher, vMatchesBR);
-            DrawMatches(pBaseFrame, pReferenceFrame, vMatchesBR, 1);
+        cv::Mat Tcw;
+        if (i == 0) {
+            Tcw = cv::Mat::eye(4, 4, CV_32F);
+        } else {
+            // curr -> prev
+            vector<cv::DMatch> vMatches12 = Match(currFrame, prevFrame, pMatcher);
 
-            for (vector<pair<double, double>>::iterator it = vDataRP.begin(); it != vDataRP.end(); it++) {
-                // recall - precision
-                f << it->second << ", " << it->first << endl;
+            // Run RANSAC
+
+            bool bOK = ransac.Iterate(currFrame, prevFrame, vMatches12);
+
+            // Draw Inliers matches
+            if (bOK) {
+                DrawMatches(currFrame, prevFrame, ransac.mvInliers);
+
+                // Get transformation estimation
+                Tcw = Converter::toMat<float, 4, 4>(ransac.mT12);
+
+                // Update pose
+                Tcw = prevFrame->mTcw * Tcw;
+
+                // Display clouds
+                vResidualStatistics.push_back(ransac.TransformSourcePointCloud());
+                pCloudDrawer->UpdateSourceCloud(ransac.mpTransformedCloud);
+                pCloudDrawer->UpdateTargetCloud(ransac.mpTargetInlierCloud);
+            } else {
+                cout << "Ransac fail" << endl;
+                Tcw = cv::Mat::eye(4, 4, CV_32F);
+                Tcw = prevFrame->mTcw * Tcw;
             }
-
-            f.close();
         }
+
+        currFrame->SetPose(Tcw);
+
+        // Save results
+        const cv::Mat& R = currFrame->mRcw;
+        vector<float> q = Converter::toQuaternion(R);
+        const cv::Mat& t = currFrame->mtcw;
+        f << setprecision(6) << currFrame->mTimestamp << setprecision(7) << " " << t.at<float>(0) << " " << t.at<float>(1) << " " << t.at<float>(2)
+          << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl;
+
+        if (prevFrame)
+            delete prevFrame;
+
+        prevFrame = currFrame;
     }
+
+    auto [minIt, maxIt] = std::minmax_element(vResidualStatistics.begin(), vResidualStatistics.end());
+    float sum = std::accumulate(vResidualStatistics.begin(), vResidualStatistics.end(), 0.0f);
+    cout << "Max residual: " << *maxIt << endl;
+    cout << "Min residual: " << *minIt << endl;
+    cout << "Mean residual: " << sum / static_cast<float>(vResidualStatistics.size()) << endl;
+
+    f.close();
+    cout << "Trajectory saved!" << endl;
+
+    pViewer->RequestFinish();
+    while (!pViewer->isFinished())
+        usleep(5000);
+
+    pangolin::BindToContext("Cloud Viewer");
 
     return 0;
 }
