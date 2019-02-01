@@ -47,29 +47,20 @@ bool Ransac::Iterate(Frame* pF1, Frame* pF2, const vector<cv::DMatch>& m12)
     vector<cv::DMatch> vGoodMatches;
     vGoodMatches.reserve(m12.size());
 
-    if (mCheckDepth) {
-        for (const auto& m : m12) {
-            const cv::Point3f& source = mpSourceFrame->mvKps3Dc[m.queryIdx];
-            const cv::Point3f& target = mpTargetFrame->mvKps3Dc[m.trainIdx];
+    for (const auto& m : m12) {
+        const cv::Point3f& source = mpSourceFrame->mvKps3Dc[m.queryIdx];
+        const cv::Point3f& target = mpTargetFrame->mvKps3Dc[m.trainIdx];
 
+        if (mCheckDepth) {
             if (isnan(source.z) || isnan(target.z))
                 continue;
             if (source.z <= 0 || target.z <= 0)
                 continue;
-
-            vGoodMatches.push_back(m);
-            mpSourceCloud->points.push_back(pcl::PointXYZ(source.x, source.y, source.z));
-            mpTargetCloud->points.push_back(pcl::PointXYZ(target.x, target.y, target.z));
         }
-    } else {
-        for (const auto& m : m12) {
-            const cv::Point3f& source = mpSourceFrame->mvKps3Dc[m.queryIdx];
-            const cv::Point3f& target = mpTargetFrame->mvKps3Dc[m.trainIdx];
 
-            vGoodMatches.push_back(m);
-            mpSourceCloud->points.push_back(pcl::PointXYZ(source.x, source.y, source.z));
-            mpTargetCloud->points.push_back(pcl::PointXYZ(target.x, target.y, target.z));
-        }
+        vGoodMatches.push_back(m);
+        mpSourceCloud->points.push_back(pcl::PointXYZ(source.x, source.y, source.z));
+        mpTargetCloud->points.push_back(pcl::PointXYZ(target.x, target.y, target.z));
     }
 
     if (vGoodMatches.size() < mMinInlierTh)

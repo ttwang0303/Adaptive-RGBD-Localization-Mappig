@@ -2,6 +2,7 @@
 #define POINTCLOUDDRAWER_H
 
 #include <mutex>
+#include <pcl/common/io.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
@@ -11,9 +12,9 @@ public:
 
     void DrawPointCloud();
 
-    void UpdateSourceCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr pSource);
+    void UpdateSourceCloud(pcl::PointCloud<pcl::PointXYZ>& pSource);
 
-    void UpdateTargetCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr pTarget);
+    void UpdateTargetCloud(pcl::PointCloud<pcl::PointXYZ>& pTarget);
 
 private:
     float mPointSize;

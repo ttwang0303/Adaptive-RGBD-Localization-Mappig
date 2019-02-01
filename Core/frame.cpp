@@ -2,6 +2,7 @@
 #include "Utils/constants.h"
 #include "landmark.h"
 #include <boost/make_shared.hpp>
+#include <pcl/filters/voxel_grid.h>
 
 using namespace std;
 
@@ -82,13 +83,13 @@ void Frame::CreateCloud()
     if (mpCloud)
         return;
 
-    mpCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZRGBA>>();
+    mpCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZRGB>>();
 
     for (int i = 0; i < mDepth.rows; ++i) {
         for (int j = 0; j < mDepth.cols; ++j) {
             float z = mDepth.at<float>(i, j);
             if (z > 0) {
-                pcl::PointXYZRGBA p;
+                pcl::PointXYZRGB p;
                 p.z = z;
                 p.x = (j - cx) * z * invfx;
                 p.y = (i - cy) * z * invfy;
@@ -101,6 +102,17 @@ void Frame::CreateCloud()
             }
         }
     }
+}
+
+void Frame::VoxelGridFilterCloud(float resolution)
+{
+    if (!mpCloud)
+        return;
+
+    pcl::VoxelGrid<pcl::PointXYZRGB> voxel;
+    voxel.setLeafSize(resolution, resolution, resolution);
+    voxel.setInputCloud(mpCloud);
+    voxel.filter(*mpCloud);
 }
 
 void Frame::AddLandmark(Landmark* pLandmark, const size_t& idx)

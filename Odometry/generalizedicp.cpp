@@ -17,6 +17,8 @@ GeneralizedICP::GeneralizedICP(int iters, double maxCorrespondenceDist)
 
     mpSourceCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
     mpTargetCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+
+    mT12 = Eigen::Matrix4f::Identity();
 }
 
 bool GeneralizedICP::Compute(const Frame* pF1, const Frame* pF2, const vector<cv::DMatch>& vMatches12, Eigen::Matrix4f& guess)
@@ -34,6 +36,20 @@ bool GeneralizedICP::Compute(const pcl::PointCloud<pcl::PointXYZ>::Ptr pSourceCl
     mpSourceCloud = pSourceCloud;
     mpTargetCloud = pTargetCloud;
     return Align(guess, isSourceTransformed);
+}
+
+bool GeneralizedICP::Compute(const Frame* pF1, const Frame* pF2, const Eigen::Matrix4f& guess)
+{
+    if (pF1->mpCloud->points.empty() || pF2->mpCloud->points.empty())
+        return false;
+
+    mpSourceCloud->points.clear();
+    mpTargetCloud->points.clear();
+
+    pcl::copyPointCloud<pcl::PointXYZRGB, pcl::PointXYZ>(*pF1->mpCloud, *mpSourceCloud);
+    pcl::copyPointCloud<pcl::PointXYZRGB, pcl::PointXYZ>(*pF2->mpCloud, *mpTargetCloud);
+
+    return Align(guess);
 }
 
 bool GeneralizedICP::ComputeSubset(const Frame* pF1, const Frame* pF2, const vector<cv::DMatch>& vMatches12)
@@ -74,8 +90,8 @@ bool GeneralizedICP::Align(const Eigen::Matrix4f& guess, const bool isSourceTran
 
 void GeneralizedICP::CreateCloudsFromMatches(const Frame* pF1, const Frame* pF2, const vector<cv::DMatch>& vMatches12, const Eigen::Matrix4f& T12, const bool& calcDist)
 {
-    mpSourceCloud->clear();
-    mpTargetCloud->clear();
+    mpSourceCloud->points.clear();
+    mpTargetCloud->points.clear();
 
     double dist = 0.0;
     cv::Mat R(3, 3, CV_32F);
@@ -110,14 +126,6 @@ void GeneralizedICP::CreateCloudsFromMatches(const Frame* pF1, const Frame* pF2,
         mpSourceCloud->points.push_back(pcl::PointXYZ(source.x, source.y, source.z));
         mpTargetCloud->points.push_back(pcl::PointXYZ(target.x, target.y, target.z));
     }
-
-    mpSourceCloud->height = 1;
-    mpSourceCloud->width = mpSourceCloud->points.size();
-    mpSourceCloud->is_dense = false;
-
-    mpTargetCloud->height = 1;
-    mpTargetCloud->width = mpTargetCloud->points.size();
-    mpTargetCloud->is_dense = false;
 
     if (calcDist) {
         double meanDist = dist / mpTargetCloud->size();
@@ -156,3 +164,13 @@ void GeneralizedICP::SetMaximumIterations(int iters) { mGicp.setMaximumIteration
 void GeneralizedICP::SetMaxCorrespondenceDistance(double dist) { mGicp.setMaxCorrespondenceDistance(dist); }
 
 void GeneralizedICP::SetEuclideanFitnessEpsilon(double epsilon) { mGicp.setEuclideanFitnessEpsilon(epsilon); }
+
+void GeneralizedICP::SetMaximumOptimizerIterations(int iters) { mGicp.setMaximumOptimizerIterations(iters); }
+
+void GeneralizedICP::SetRANSACIterations(int iters) { mGicp.setRANSACIterations(iters); }
+
+void GeneralizedICP::SetRANSACOutlierRejectionThreshold(double thresh) { mGicp.setRANSACOutlierRejectionThreshold(thresh); }
+
+void GeneralizedICP::SetTransformationEpsilon(double epsilon) { mGicp.setTransformationEpsilon(epsilon); }
+
+void GeneralizedICP::SetUseReciprocalCorrespondences(bool flag) { mGicp.setUseReciprocalCorrespondences(flag); }

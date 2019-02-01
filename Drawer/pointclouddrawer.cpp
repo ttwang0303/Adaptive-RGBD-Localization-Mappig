@@ -1,7 +1,6 @@
 #include "pointclouddrawer.h"
 #include <boost/make_shared.hpp>
 #include <pangolin/pangolin.h>
-#include <pcl/common/io.h>
 
 using namespace std;
 
@@ -53,14 +52,14 @@ void PointCloudDrawer::DrawPointCloud()
     glEnd();
 }
 
-void PointCloudDrawer::UpdateSourceCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr pSource)
+void PointCloudDrawer::UpdateSourceCloud(pcl::PointCloud<pcl::PointXYZ>& pSource)
 {
     unique_lock<mutex> lock(mMutexPointCloud);
-    pcl::copyPointCloud(*pSource, *mpSourceCloud);
+    pcl::copyPointCloud(pSource, *mpSourceCloud);
 }
 
-void PointCloudDrawer::UpdateTargetCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr pTarget)
+void PointCloudDrawer::UpdateTargetCloud(pcl::PointCloud<pcl::PointXYZ>& pTarget)
 {
     unique_lock<mutex> lock(mMutexPointCloud);
-    pcl::copyPointCloud(*pTarget, *mpTargetCloud);
+    pcl::copyPointCloud(pTarget, *mpTargetCloud);
 }

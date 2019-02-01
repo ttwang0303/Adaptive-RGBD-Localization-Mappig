@@ -22,13 +22,14 @@ public:
     void Compute(cv::Ptr<cv::DescriptorExtractor> pDescriptor);
 
     void CreateCloud();
+    void VoxelGridFilterCloud(float resolution);
 
     void AddLandmark(Landmark* pLandmark, const size_t& idx);
 
 public:
     cv::Mat mIm, mDepth;
     double mTimestamp;
-    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr mpCloud;
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr mpCloud;
     std::vector<cv::KeyPoint> mvKps;
     cv::Mat mDescriptors;
     std::vector<cv::Point3f> mvKps3Dc;
