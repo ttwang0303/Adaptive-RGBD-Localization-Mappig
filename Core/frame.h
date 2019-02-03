@@ -17,12 +17,15 @@ public:
 
     void DetectAndCompute(cv::Ptr<cv::FeatureDetector> pDetector, cv::Ptr<cv::DescriptorExtractor> pDescriptor);
 
+    void GridDetectAndCompute(cv::Ptr<cv::FeatureDetector> pDetector, cv::Ptr<cv::DescriptorExtractor> pDescriptor, int gridRows, int gridCols);
+
     void Detect(cv::Ptr<cv::FeatureDetector> pDetector);
 
     void Compute(cv::Ptr<cv::DescriptorExtractor> pDescriptor);
 
     void CreateCloud();
     void VoxelGridFilterCloud(float resolution);
+    void StatisticalOutlierRemovalFilterCloud(int meanK, double stddev);
 
     void AddLandmark(Landmark* pLandmark, const size_t& idx);
 

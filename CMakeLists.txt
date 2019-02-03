@@ -57,7 +57,6 @@ link_libraries(${PCL_LIBRARY_DIRS})
 find_package(Pangolin REQUIRED)
 include_directories(${Pangolin_INCLUDE_DIRS})
 
-
 include_directories(${PROJECT_SOURCE_DIR})
 
 add_library(${PROJECT_NAME} SHARED
@@ -68,7 +67,9 @@ Odometry/generalizedicp.cpp
 Odometry/adaptivergbdlocalization.cpp
 Odometry/pointtopointicp.cpp
 Odometry/ransacpcl.cpp
+Odometry/kabsch.cpp
 Core/frame.cpp
+Core/dbscan.cpp
 Core/landmark.cpp
 Drawer/viewer.cpp
 Drawer/pointclouddrawer.cpp
@@ -82,7 +83,8 @@ target_link_libraries(${PROJECT_NAME}
     ${G2O_LIBS}
     ${CHOLMOD_LIBRARIES}
     ${CSPARSE_LIBRARY}
-    ${Pangolin_LIBRARIES})
+    ${Pangolin_LIBRARIES}
+    ${libpointmatcher_LIBRARIES})
 
 add_executable(main main.cpp)
 target_link_libraries(main ${PROJECT_NAME})

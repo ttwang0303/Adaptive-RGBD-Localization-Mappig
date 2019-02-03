@@ -1,6 +1,5 @@
 #include "Core/frame.h"
 #include "Odometry/generalizedicp.h"
-#include "Odometry/kabsch.h"
 #include "Odometry/ransac.h"
 #include "Utils/constants.h"
 #include "Utils/converter.h"
@@ -65,7 +64,7 @@ int main()
         imDepth = cv::imread(baseDir + vImageFilenamesD[i], cv::IMREAD_UNCHANGED);
 
         Frame* currFrame = new Frame(imColor, imDepth, vTimestamps[i]);
-        currFrame->GridDetectAndCompute(pDetector, pDescriptor, 1, 1);
+        currFrame->GridDetectAndCompute(pDetector, pDescriptor);
 
         cv::Mat Tcw;
         if (i == 0) {
@@ -76,31 +75,25 @@ int main()
             // Run RANSAC
             sac.Iterate(prevFrame, currFrame, vMatches);
 
-            // Get inliers
-            Eigen::MatrixXf setSrc(sac.mvInliers.size(), 3);
-            Eigen::MatrixXf setTgt(sac.mvInliers.size(), 3);
-            for (int i = 0; i < sac.mvInliers.size(); i++) {
-                const auto& m = sac.mvInliers[i];
-                const cv::Point3f& source = prevFrame->mvKps3Dc[m.queryIdx];
-                const cv::Point3f& target = currFrame->mvKps3Dc[m.trainIdx];
+            // Refine with ICP
+            if (sac.mvInliers.size() < 20 || sac.rmse * 10.0f >= 7.0f) {
+                if (sac.rmse * 10.0f >= 20) {
 
-                setSrc(i, 0) = source.x;
-                setSrc(i, 1) = source.y;
-                setSrc(i, 2) = source.z;
+                    if (icp.Compute(sac.mpSourceCloud, sac.mpTargetCloud, Converter::toMatrix4f(lastT12)))
+                        Tcw = Converter::toMat<float, 4, 4>(icp.mT12);
+                    else
+                        Tcw = cv::Mat::eye(4, 4, CV_32F);
 
-                setTgt(i, 0) = target.x;
-                setTgt(i, 1) = target.y;
-                setTgt(i, 2) = target.z;
+                } else {
+                    if (icp.Compute(sac.mpSourceCloud, sac.mpTargetCloud, sac.mT12))
+                        Tcw = Converter::toMat<float, 4, 4>(icp.mT12);
+                    else
+                        Tcw = Converter::toMat<float, 4, 4>(sac.mT12);
+                }
+            } else {
+                Tcw = Converter::toMat<float, 4, 4>(sac.mT12);
             }
 
-            Kabsch kabsch;
-            Eigen::Matrix4f trans = kabsch.Compute(setSrc, setTgt);
-
-            cout << sac.mT12 << endl;
-            cout << trans << endl;
-            cout << endl;
-
-            Tcw = Converter::toMat<float, 4, 4>(sac.mT12);
             lastT12 = Tcw;
             Tcw = Tcw * prevFrame->mTcw;
             DrawMatches(prevFrame, currFrame, sac.mvInliers);
@@ -126,3 +119,4 @@ int main()
 
     return 0;
 }
+

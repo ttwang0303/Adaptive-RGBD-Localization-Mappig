@@ -26,6 +26,6 @@ const double depthFactor = 1.0 / 5000.0;
 const double invfx = 1.0 / fx;
 const double invfy = 1.0 / fy;
 
-const int nFeatures = 500;
+const int nFeatures = 1000;
 
 #endif // CONSTANTS_H

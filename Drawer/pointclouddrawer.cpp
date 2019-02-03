@@ -1,6 +1,7 @@
 #include "pointclouddrawer.h"
 #include <boost/make_shared.hpp>
 #include <pangolin/pangolin.h>
+#include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/filters/voxel_grid.h>
 
 using namespace std;
@@ -109,6 +110,12 @@ void PointCloudDrawer::UpdateMap(pcl::PointCloud<pcl::PointXYZRGB>::Ptr pMapClou
     voxel.setLeafSize(resolution, resolution, resolution);
     voxel.setInputCloud(pMapCloud);
     voxel.filter(*pMapCloud);
+
+    pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
+    sor.setInputCloud(pMapCloud);
+    sor.setMeanK(50);
+    sor.setStddevMulThresh(1.0);
+    sor.filter(*pMapCloud);
 
     for (int i = 0; i < pMapCloud->points.size(); ++i)
         mpMapCloud->points.push_back(pMapCloud->points[i]);

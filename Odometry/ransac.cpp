@@ -34,9 +34,6 @@ bool Ransac::Iterate(Frame* pF1, Frame* pF2, const vector<cv::DMatch>& m12)
 
     mpSourceCloud->points.clear();
     mpTargetCloud->points.clear();
-    mpTransformedCloud->points.clear();
-    mpSourceInlierCloud->points.clear();
-    mpTargetInlierCloud->points.clear();
 
     mpSourceFrame = pF1;
     mpTargetFrame = pF2;
@@ -46,6 +43,8 @@ bool Ransac::Iterate(Frame* pF1, Frame* pF2, const vector<cv::DMatch>& m12)
 
     vector<cv::DMatch> vGoodMatches;
     vGoodMatches.reserve(m12.size());
+    mpSourceCloud->points.reserve(m12.size());
+    mpTargetCloud->points.reserve(m12.size());
 
     for (const auto& m : m12) {
         const cv::Point3f& source = mpSourceFrame->mvKps3Dc[m.queryIdx];
@@ -147,6 +146,10 @@ float Ransac::TransformSourcePointCloud()
     float d = 0.0f;
     Eigen::Matrix3f R12 = mT12.block(0, 0, 3, 3);
     Eigen::Vector3f t12(mT12(0, 3), mT12(1, 3), mT12(2, 3));
+
+    mpTransformedCloud->points.clear();
+    mpSourceInlierCloud->points.clear();
+    mpTargetInlierCloud->points.clear();
 
     mpTransformedCloud->points.reserve(N);
     mpSourceInlierCloud->points.reserve(N);

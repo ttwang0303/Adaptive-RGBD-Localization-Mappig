@@ -39,13 +39,12 @@ void RansacPCL::CreateCloudFromMatches(const Frame* pF1, const Frame* pF2, const
     mInliersCorrespondences.clear();
     mpSourceCloud->points.clear();
     mpTargetCloud->points.clear();
-    mpTransformedCloud->points.clear();
-    mpSourceInlierCloud->points.clear();
-    mpTargetInlierCloud->points.clear();
     size_t idx = 0;
 
     mCorrespondences.reserve(vMatches12.size());
     mvDMatches.reserve(vMatches12.size());
+    mpSourceCloud->points.reserve(vMatches12.size());
+    mpTargetCloud->points.reserve(vMatches12.size());
 
     for (const auto& m : vMatches12) {
         const cv::Point3f& source = pF1->mvKps3Dc[m.queryIdx];
@@ -79,6 +78,10 @@ void RansacPCL::GetInliersDMatch(std::vector<cv::DMatch>& vInliers)
 
 float RansacPCL::ResidualError()
 {
+    mpTransformedCloud->points.clear();
+    mpSourceInlierCloud->points.clear();
+    mpTargetInlierCloud->points.clear();
+
     size_t N = mInliersCorrespondences.size();
     float d = 0.0;
     Eigen::Matrix3f R12 = mT12.block(0, 0, 3, 3);

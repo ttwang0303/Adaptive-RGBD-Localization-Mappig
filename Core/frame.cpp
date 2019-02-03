@@ -1,7 +1,9 @@
 #include "frame.h"
 #include "Utils/constants.h"
+#include "dbscan.h"
 #include "landmark.h"
 #include <boost/make_shared.hpp>
+#include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/filters/voxel_grid.h>
 
 using namespace std;
@@ -47,6 +49,74 @@ void Frame::DetectAndCompute(cv::Ptr<cv::FeatureDetector> pDetector, cv::Ptr<cv:
         cv::KeyPointsFilter::retainBest(mvKps, nFeatures);
 
     pDescriptor->compute(mIm, mvKps, mDescriptors);
+
+    N = mvKps.size();
+    mvpLandmarks = vector<Landmark*>(N, static_cast<Landmark*>(nullptr));
+
+    mvKps3Dc = vector<cv::Point3f>(N, cv::Point3f(0, 0, 0));
+
+    for (int i = 0; i < N; ++i) {
+        const float v = mvKps[i].pt.y;
+        const float u = mvKps[i].pt.x;
+
+        const float z = mDepth.at<float>(v, u);
+        if (z > 0) {
+            // KeyPoint in Camera coordinates
+            const float x = (u - cx) * z * invfx;
+            const float y = (v - cy) * z * invfy;
+            mvKps3Dc[i] = cv::Point3f(x, y, z);
+        }
+    }
+}
+
+void Frame::GridDetectAndCompute(cv::Ptr<cv::FeatureDetector> pDetector, cv::Ptr<cv::DescriptorExtractor> pDescriptor, int gridRows, int gridCols)
+{
+    cv::Mat grayImage;
+    cv::cvtColor(mIm, grayImage, CV_BGR2GRAY);
+
+    std::vector<cv::KeyPoint> raw_keypoints;
+    int grayImageWidth = grayImage.cols;
+    int grayImageHeight = grayImage.rows;
+
+    int maximalFeaturesInROI = nFeatures * 3 / (gridCols * gridRows);
+
+    // Let's divide image into boxes/rectangles
+    for (int k = 0; k < gridCols; k++) {
+        for (int i = 0; i < gridRows; i++) {
+
+            std::vector<cv::KeyPoint> keypointsInROI;
+            cv::Mat roiBGR(grayImage, cv::Rect(k * grayImageWidth / gridCols, i * grayImageHeight / gridRows, grayImageWidth / gridCols, grayImageHeight / gridRows));
+
+            pDetector->detect(roiBGR, keypointsInROI);
+
+            // Sorting keypoints by the response to choose the bests
+            std::sort(keypointsInROI.begin(), keypointsInROI.end(), [](const cv::KeyPoint& p1, const cv::KeyPoint& p2) {
+                return p1.response > p2.response;
+            });
+
+            // Adding to final keypoints
+            for (size_t j = 0; j < keypointsInROI.size() && j < maximalFeaturesInROI; j++) {
+                keypointsInROI[j].pt.x += float(k * grayImageWidth / gridCols);
+                keypointsInROI[j].pt.y += float(i * grayImageHeight / gridRows);
+                raw_keypoints.push_back(keypointsInROI[j]);
+            }
+        }
+    }
+
+    // It is better to have them sorted according to their response strength
+    std::sort(raw_keypoints.begin(), raw_keypoints.end(), [](const cv::KeyPoint& p1, const cv::KeyPoint& p2) {
+        return p1.response > p2.response;
+    });
+
+    if (raw_keypoints.size() > nFeatures)
+        raw_keypoints.resize(nFeatures);
+
+    mvKps = raw_keypoints;
+    double epsilon = 1.0;
+    DBScan dbscan(epsilon);
+    dbscan.run(mvKps);
+
+    pDescriptor->compute(grayImage, mvKps, mDescriptors);
 
     N = mvKps.size();
     mvpLandmarks = vector<Landmark*>(N, static_cast<Landmark*>(nullptr));
@@ -113,6 +183,18 @@ void Frame::VoxelGridFilterCloud(float resolution)
     voxel.setLeafSize(resolution, resolution, resolution);
     voxel.setInputCloud(mpCloud);
     voxel.filter(*mpCloud);
+}
+
+void Frame::StatisticalOutlierRemovalFilterCloud(int meanK, double stddev)
+{
+    if (!mpCloud)
+        return;
+
+    pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
+    sor.setInputCloud(mpCloud);
+    sor.setMeanK(meanK);
+    sor.setStddevMulThresh(stddev);
+    sor.filter(*mpCloud);
 }
 
 void Frame::AddLandmark(Landmark* pLandmark, const size_t& idx)
