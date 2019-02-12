@@ -1,6 +1,8 @@
 #include "Core/frame.h"
 #include "Odometry/generalizedicp.h"
-#include "Odometry/iaicp/iaicp.h"
+#include "Odometry/icp/icpPointToPlane.h"
+#include "Odometry/icp/icpPointToPoint.h"
+#include "Odometry/icp/matrix.h"
 #include "Odometry/ransac.h"
 #include "Utils/constants.h"
 #include "Utils/converter.h"
@@ -16,7 +18,7 @@
 
 using namespace std;
 
-const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset_freiburg1_room/";
+const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset_freiburg1_desk/";
 
 int main()
 {
@@ -47,8 +49,8 @@ int main()
          << "\nImages in the sequence: " << nImages << endl
          << endl;
 
-    cv::Ptr<cv::FeatureDetector> pDetector = CreateDetector("SHI_TOMASI");
-    cv::Ptr<cv::DescriptorExtractor> pDescriptor = CreateDescriptor("BRIEF");
+    cv::Ptr<cv::FeatureDetector> pDetector = CreateDetector("SURF");
+    cv::Ptr<cv::DescriptorExtractor> pDescriptor = CreateDescriptor("ORB");
     cv::Ptr<cv::DescriptorMatcher> pMatcher = cv::BFMatcher::create(pDescriptor->defaultNorm());
 
     ofstream f("CameraTrajectory.txt");
@@ -58,10 +60,10 @@ int main()
     cv::Mat lastT12;
 
     Ransac sac(200, 20, 3.0f, 4);
-    GeneralizedICP icp(20, 0.07);
+    GeneralizedICP icp(20, 0.05);
 
     for (size_t i = 0; i < nImages; i += 1) {
-        imColor = cv::imread(baseDir + vImageFilenamesRGB[i], cv::IMREAD_UNCHANGED);
+        imColor = cv::imread(baseDir + vImageFilenamesRGB[i], cv::IMREAD_COLOR);
         imDepth = cv::imread(baseDir + vImageFilenamesD[i], cv::IMREAD_UNCHANGED);
 
         Frame* currFrame = new Frame(imColor, imDepth, vTimestamps[i]);
@@ -76,24 +78,51 @@ int main()
             // Run RANSAC
             sac.Iterate(prevFrame, currFrame, vMatches);
 
-            if (sac.mvInliers.size() < 20 || sac.rmse * 10.0f >= 7.0f) {
-                if (sac.rmse * 10.0f >= 20) {
+            int32_t dim = 3;
+            int32_t num = sac.mvInliers.size();
+            double* Model = (double*)calloc(3 * num, sizeof(double));
+            double* Template = (double*)calloc(3 * num, sizeof(double));
 
-                    if (icp.Compute(sac.mpSourceCloud, sac.mpTargetCloud, Eigen::Matrix4f::Identity()))
-                        Tcw = Converter::toMat<float, 4, 4>(icp.mT12);
-                    else
-                        Tcw = cv::Mat::eye(4, 4, CV_32F);
+            for (size_t i = 0; i < num; ++i) {
+                const cv::DMatch& m = sac.mvInliers[i];
 
-                } else {
-                    if (icp.Compute(sac.mpSourceCloud, sac.mpTargetCloud, sac.mT12))
-                        Tcw = Converter::toMat<float, 4, 4>(icp.mT12);
-                    else
-                        Tcw = Converter::toMat<float, 4, 4>(sac.mT12);
-                }
-            } else {
-                Tcw = Converter::toMat<float, 4, 4>(sac.mT12);
+                // soruce
+                Template[i * 3 + 0] = static_cast<double>(prevFrame->mvKps3Dc[m.queryIdx].x);
+                Template[i * 3 + 1] = static_cast<double>(prevFrame->mvKps3Dc[m.queryIdx].y);
+                Template[i * 3 + 2] = static_cast<double>(prevFrame->mvKps3Dc[m.queryIdx].z);
+
+                // target
+                Model[i * 3 + 0] = static_cast<double>(currFrame->mvKps3Dc[m.trainIdx].x);
+                Model[i * 3 + 1] = static_cast<double>(currFrame->mvKps3Dc[m.trainIdx].y);
+                Model[i * 3 + 2] = static_cast<double>(currFrame->mvKps3Dc[m.trainIdx].z);
             }
 
+            Eigen::Matrix<float, 3, 3, Eigen::RowMajor> rot = sac.mT12.block<3, 3>(0, 0);
+            Eigen::Vector3f trans = sac.mT12.block<3, 1>(0, 3);
+            float* ptr = rot.data();
+            Matrix R = Matrix(3, 3, ptr);
+            ptr = trans.data();
+            Matrix t = Matrix(3, 1, ptr);
+
+            IcpPointToPlane icp(Model, num, dim, 15, 5.0);
+            // IcpPointToPoint icp(Model, num, dim);
+            icp.setMaxIterations(50);
+            icp.setMinDeltaParam(1e-8);
+            double res = icp.fit(Template, num, R, t, 0.01);
+
+            for (int i = 0; i < 3; ++i) {
+                for (int j = 0; j < 3; ++j)
+                    sac.mT12(i, j) = R.val[i][j];
+            }
+
+            for (int i = 0; i < 3; ++i)
+                sac.mT12(i, 3) = t.val[i][0];
+
+            // free memory
+            free(Model);
+            free(Template);
+
+            Tcw = Converter::toMat<float, 4, 4>(sac.mT12);
             lastT12 = Tcw;
             Tcw = Tcw * prevFrame->mTcw;
             DrawMatches(prevFrame, currFrame, sac.mvInliers);
@@ -119,3 +148,4 @@ int main()
 
     return 0;
 }
+

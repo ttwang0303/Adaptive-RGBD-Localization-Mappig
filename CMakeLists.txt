@@ -57,6 +57,18 @@ link_libraries(${PCL_LIBRARY_DIRS})
 find_package(Pangolin REQUIRED)
 include_directories(${Pangolin_INCLUDE_DIRS})
 
+find_package(OpenMP)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+
+#------------------------------------------
+#                    DBoW2
+#------------------------------------------
+find_package(DBoW2 REQUIRED)
+include_directories(${DBoW2_INCLUDE_DIRS})
+find_package(DLib REQUIRED)
+include_directories(${DLib_INCLUDE_DIRS})
+
 include_directories(${PROJECT_SOURCE_DIR})
 
 add_library(${PROJECT_NAME} SHARED
@@ -65,15 +77,27 @@ Utils/converter.cpp
 Odometry/ransac.cpp
 Odometry/generalizedicp.cpp
 Odometry/adaptivergbdlocalization.cpp
-Odometry/pointtopointicp.cpp
 Odometry/ransacpcl.cpp
 Odometry/kabsch.cpp
+Odometry/iaicp/iaicp.cpp
 Core/frame.cpp
 Core/dbscan.cpp
 Core/landmark.cpp
 Drawer/viewer.cpp
 Drawer/pointclouddrawer.cpp
 )
+
+#add_library(icp SHARED
+#    Odometry/icp/icp.cpp
+#    Odometry/icp/icpPointToPlane.cpp
+#    Odometry/icp/icpPointToPoint.cpp
+#    Odometry/icp/kdtree.cpp
+#    Odometry/icp/matrix.cpp
+#    )
+
+#target_link_libraries(icp
+#     ${BOOST_LIBRARIES}
+#    )
 
 target_link_libraries(${PROJECT_NAME}
     ${PCL_LIBRARIES}
@@ -84,7 +108,8 @@ target_link_libraries(${PROJECT_NAME}
     ${CHOLMOD_LIBRARIES}
     ${CSPARSE_LIBRARY}
     ${Pangolin_LIBRARIES}
-    ${libpointmatcher_LIBRARIES})
+    ${DLib_LIBS}
+    ${DBoW2_LIBS})
 
 add_executable(main main.cpp)
 target_link_libraries(main ${PROJECT_NAME})

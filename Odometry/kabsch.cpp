@@ -15,7 +15,7 @@ Eigen::Matrix4f Kabsch::Compute(const Eigen::MatrixXf &setA, const Eigen::Matrix
 {
     mTransformation.setIdentity();
     if (setA.rows() == 0)
-        mTransformation;
+        return mTransformation;
 
     // Calculate center of mass
     Eigen::Vector3f centerOfMassA, centerOfMassB;

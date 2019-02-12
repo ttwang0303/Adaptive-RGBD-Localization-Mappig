@@ -1,6 +1,9 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
+#define endll endl \
+    << endl // double end line definition
+
 // -------- FR1 --------
 const double fx = 517.3;
 const double fy = 516.5;
@@ -27,5 +30,9 @@ const double invfx = 1.0 / fx;
 const double invfy = 1.0 / fy;
 
 const int nFeatures = 1000;
+
+// Iaicp
+const int height = 480;
+const int width = 640;
 
 #endif // CONSTANTS_H

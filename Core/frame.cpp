@@ -174,6 +174,39 @@ void Frame::CreateCloud()
     }
 }
 
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr Frame::Mat2Cloud()
+{
+    if (mpCloud)
+        return mpCloud;
+
+    mpCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZRGB>>();
+    mpCloud->points.resize(width * height);
+
+    for (size_t i = 0; i < width; i++) {
+        for (size_t j = 0; j < height; j++) {
+            pcl::PointXYZRGB pt;
+            if (!(mDepth.at<float>(j, i) == mDepth.at<float>(j, i))) {
+                pt.z = 0.f / 0.f;
+                mpCloud->points.at(j * width + i) = pt;
+                continue;
+            }
+
+            pt.z = mDepth.at<float>(j, i);
+            pt.x = (float(i) - cx) * pt.z * invfx;
+            pt.y = (float(j) - cy) * pt.z * invfy;
+
+            cv::Vec3b color = mIm.at<cv::Vec3b>(j, i);
+            pt.r = (int)color.val[0];
+            pt.g = (int)color.val[1];
+            pt.b = (int)color.val[2];
+
+            mpCloud->points.at(j * width + i) = pt;
+        }
+    }
+
+    return mpCloud;
+}
+
 void Frame::VoxelGridFilterCloud(float resolution)
 {
     if (!mpCloud)

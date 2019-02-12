@@ -29,6 +29,9 @@ public:
 
     void AddLandmark(Landmark* pLandmark, const size_t& idx);
 
+    // Iaicp test
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr Mat2Cloud();
+
 public:
     cv::Mat mIm, mDepth;
     double mTimestamp;

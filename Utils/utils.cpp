@@ -4,6 +4,8 @@
 #include "converter.h"
 #include <fstream>
 #include <opencv2/xfeatures2d.hpp>
+#include <pcl/features/normal_3d.h>
+#include <pcl/features/normal_3d_omp.h>
 #include <sstream>
 
 using namespace std;
@@ -84,7 +86,7 @@ cv::Ptr<cv::FeatureDetector> CreateDetector(const std::string& detector)
     } else if (detector == "HARRIS"s) {
         pDetector = cv::GFTTDetector::create(nFeatures, 0.01, 1, 3, true, 0.04);
     } else if (detector == "SHI_TOMASI"s) {
-        pDetector = cv::GFTTDetector::create(nFeatures, 0.01, 1, 3, false, 0.04);
+        pDetector = cv::GFTTDetector::create(nFeatures, 0.01, 10, 3, false, 0.04);
     } else if (detector == "STAR"s) {
         pDetector = cv::xfeatures2d::StarDetector::create(45, 6, 10, 10, 5);
     } else if (detector == "BRISK"s) {
@@ -133,7 +135,6 @@ bool FindHomography(const Frame* pF1, const Frame* pF2, const vector<cv::DMatch>
     }
 
     try {
-        vector<uchar> status;
         H = cv::findHomography(vSourcePoints, vTargetPoints, CV_RANSAC, 4, vRansacStatus, 500, 0.995);
         //        Mat Fundamental = findFundamentalMat(p1, p2, RansacStatus, FM_RANSAC);
         return true;
@@ -249,4 +250,20 @@ vector<pair<double, double>> TestRecallPrecision(Frame* pF1, Frame* pF2, cv::Ptr
     }
 
     return vDataRP;
+}
+
+void AddNormal(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<pcl::PointNormal>::Ptr normalsCloud, int k)
+{
+    pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr searchTree(new pcl::search::KdTree<pcl::PointXYZ>);
+    searchTree->setInputCloud(cloud);
+
+    pcl::NormalEstimationOMP<pcl::PointXYZ, pcl::Normal> normalEstimator;
+    normalEstimator.setInputCloud(cloud);
+    normalEstimator.setSearchMethod(searchTree);
+    normalEstimator.setKSearch(k);
+    normalEstimator.compute(*normals);
+
+    pcl::concatenateFields(*cloud, *normals, *normalsCloud);
 }
