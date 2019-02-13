@@ -20,7 +20,7 @@
 
 using namespace std;
 
-const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset_freiburg1_room/";
+const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/living_room_traj1_frei_png/";
 
 int main()
 {

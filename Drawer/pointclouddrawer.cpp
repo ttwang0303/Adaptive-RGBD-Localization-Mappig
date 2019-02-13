@@ -125,7 +125,7 @@ void PointCloudDrawer::DrawPointCloud()
         cv::Mat Twc = pKF->GetPose().inv().t();
         glPushMatrix();
         glMultMatrixf(Twc.ptr<GLfloat>(0));
-        glLineWidth(1);
+        glLineWidth(1.5);
         glColor3f(255.0f / 255.0f, 153.0f / 255.0f, 51.0f / 255.0f);
         glBegin(GL_LINES);
         glVertex3f(0, 0, 0);
@@ -155,7 +155,7 @@ void PointCloudDrawer::DrawPointCloud()
         glEnd();
     }
 
-    glLineWidth(1.0f);
+    glLineWidth(1.5f);
     glColor3f(0.0f, 0.75f, 1.0f);
     glBegin(GL_LINES);
     for (size_t i = 0; i < vpKFs.size(); ++i) {
