@@ -86,7 +86,7 @@ cv::Ptr<cv::FeatureDetector> CreateDetector(const std::string& detector)
     } else if (detector == "HARRIS"s) {
         pDetector = cv::GFTTDetector::create(nFeatures, 0.01, 1, 3, true, 0.04);
     } else if (detector == "SHI_TOMASI"s) {
-        pDetector = cv::GFTTDetector::create(nFeatures, 0.01, 10, 3, false, 0.04);
+        pDetector = cv::GFTTDetector::create(nFeatures, 0.01, 5, 3, false, 0.04);
     } else if (detector == "STAR"s) {
         pDetector = cv::xfeatures2d::StarDetector::create(45, 6, 10, 10, 5);
     } else if (detector == "BRISK"s) {
@@ -191,7 +191,6 @@ vector<pair<double, double>> TestRecallPrecision(Frame* pF1, Frame* pF2, cv::Ptr
         if (m1.distance < 0.9 * m2.distance) {
             isMatch.push_back(true);
             vMatches12.push_back(m1);
-
         } else {
             isMatch.push_back(false);
             vMatches12.push_back(m1);
@@ -266,4 +265,71 @@ void AddNormal(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<pcl::P
     normalEstimator.compute(*normals);
 
     pcl::concatenateFields(*cloud, *normals, *normalsCloud);
+}
+
+StatefulFeatureDetector* AdjusterWrapper(cv::Ptr<DetectorAdjuster> detadj, int min, int max)
+{
+    int iterations = 5;
+    printf("Using adjusted keypoint detector with %d maximum iterations, keeping the number of keypoints between %d and %d\n", iterations, min, max);
+
+    return new VideoDynamicAdaptedFeatureDetector(detadj, min, max);
+}
+
+StatefulFeatureDetector* AdjustedGridWrapper(cv::Ptr<DetectorAdjuster> detadj)
+{
+    int min = 600;
+    int max = min * 1.5; //
+
+    int gridRes = 3;
+    int gridcells = gridRes * gridRes;
+    int gridmin = round(min / static_cast<float>(gridcells));
+    int gridmax = round(max / static_cast<float>(gridcells));
+    printf("Using gridded keypoint detector with %dx%d cells, keeping %d keypoints in total\n", gridRes, gridRes, max);
+
+    StatefulFeatureDetector* detector = AdjusterWrapper(detadj, gridmin, gridmax);
+    return new VideoGridAdaptedFeatureDetector(detector, max, gridRes, gridRes);
+}
+
+cv::Feature2D* CreateDetector2(const string& detectorName)
+{
+    DetectorAdjuster* detAdj = nullptr;
+
+    cout << "Using " << detectorName << " keypoint detector." << endl;
+    if (detectorName == "FAST") {
+        detAdj = new DetectorAdjuster("FAST", 20);
+    } else if (detectorName == "SURF" || detectorName == "SURF128") {
+        detAdj = new DetectorAdjuster("SURF", 200);
+    } else if (detectorName == "SIFT") {
+        detAdj = new DetectorAdjuster("SIFT", 0.04, 0.0001);
+    } else if (detectorName == "ORB") {
+        detAdj = new DetectorAdjuster("ORB", 20);
+    } else {
+        cout << "Unsupported Keypoint Detector. Using ORB as fallback" << endl;
+        return CreateDetector2("ORB");
+    }
+
+    return AdjustedGridWrapper(detAdj);
+}
+
+cv::Ptr<cv::DescriptorExtractor> CreateDescriptor2(const string& descriptorName)
+{
+    if (descriptorName == "ORB") {
+        return cv::ORB::create();
+    } else if (descriptorName == "SIFT") {
+        return cv::xfeatures2d::SiftDescriptorExtractor::create();
+    } else if (descriptorName == "SURF") {
+        return cv::xfeatures2d::SurfDescriptorExtractor::create();
+    } else if (descriptorName == "SURF128") {
+        auto extractor = cv::xfeatures2d::SurfDescriptorExtractor::create();
+        extractor->setExtended(true);
+        return extractor;
+    } else if (descriptorName == "BRIEF") {
+        return cv::xfeatures2d::BriefDescriptorExtractor::create();
+    } else if (descriptorName == "FREAK") {
+        return cv::xfeatures2d::FREAK::create();
+    } else if (descriptorName == "BRISK") {
+        return cv::BRISK::create();
+    } else {
+        return CreateDescriptor2("ORB");
+    }
 }

@@ -1,9 +1,9 @@
 #include "Core/frame.h"
 #include "Odometry/generalizedicp.h"
-#include "Odometry/iaicp/iaicp.h"
 #include "Odometry/ransac.h"
 #include "Utils/constants.h"
 #include "Utils/converter.h"
+#include "Utils/featureadjuster.h"
 #include "Utils/utils.h"
 #include <algorithm>
 #include <iostream>
@@ -47,8 +47,12 @@ int main()
          << "\nImages in the sequence: " << nImages << endl
          << endl;
 
-    cv::Ptr<cv::FeatureDetector> pDetector = CreateDetector("SHI_TOMASI");
-    cv::Ptr<cv::DescriptorExtractor> pDescriptor = CreateDescriptor("BRIEF");
+    //    cv::Ptr<cv::FeatureDetector> pDetector = CreateDetector("FAST");
+    //    cv::Ptr<cv::DescriptorExtractor> pDescriptor = CreateDescriptor("ORB");
+    //    cv::Ptr<cv::DescriptorMatcher> pMatcher = cv::BFMatcher::create(pDescriptor->defaultNorm());
+
+    cv::Ptr<cv::FeatureDetector> pDetector(CreateDetector2("FAST"));
+    cv::Ptr<cv::DescriptorExtractor> pDescriptor(CreateDescriptor2("ORB"));
     cv::Ptr<cv::DescriptorMatcher> pMatcher = cv::BFMatcher::create(pDescriptor->defaultNorm());
 
     ofstream f("CameraTrajectory.txt");
@@ -61,7 +65,7 @@ int main()
     GeneralizedICP icp(20, 0.07);
 
     for (size_t i = 0; i < nImages; i += 1) {
-        imColor = cv::imread(baseDir + vImageFilenamesRGB[i], cv::IMREAD_UNCHANGED);
+        imColor = cv::imread(baseDir + vImageFilenamesRGB[i], cv::IMREAD_COLOR);
         imDepth = cv::imread(baseDir + vImageFilenamesD[i], cv::IMREAD_UNCHANGED);
 
         Frame* currFrame = new Frame(imColor, imDepth, vTimestamps[i]);

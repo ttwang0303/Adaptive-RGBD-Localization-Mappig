@@ -1,6 +1,7 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include "featureadjuster.h"
 #include <opencv2/opencv.hpp>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/point_cloud.h>
@@ -40,4 +41,11 @@ void VoxelGridFilterCloud(pcl::PointCloud<PointT>& cloud, float resolution)
     voxel.setInputCloud(boost::make_shared<pcl::PointCloud<PointT>>(cloud));
     voxel.filter(cloud);
 }
+
+// New Features functions
+StatefulFeatureDetector* AdjusterWrapper(cv::Ptr<DetectorAdjuster> detadj, int min, int max);
+StatefulFeatureDetector* AdjustedGridWrapper(cv::Ptr<DetectorAdjuster> detadj);
+cv::Feature2D* CreateDetector2(const std::string& detectorName);
+cv::Ptr<cv::DescriptorExtractor> CreateDescriptor2(const std::string& descriptorName);
+
 #endif // UTILS_H

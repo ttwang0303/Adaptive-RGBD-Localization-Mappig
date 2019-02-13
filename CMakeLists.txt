@@ -69,11 +69,17 @@ include_directories(${DBoW2_INCLUDE_DIRS})
 find_package(DLib REQUIRED)
 include_directories(${DLib_INCLUDE_DIRS})
 
+#------------------------------------------
+#                    Gnuplot-iostream
+#------------------------------------------
+include_directories(/home/antonio/Public/Libraries/gnuplot-iostream/)
+
 include_directories(${PROJECT_SOURCE_DIR})
 
 add_library(${PROJECT_NAME} SHARED
 Utils/utils.cpp
 Utils/converter.cpp
+Utils/featureadjuster.cpp
 Odometry/ransac.cpp
 Odometry/generalizedicp.cpp
 Odometry/adaptivergbdlocalization.cpp
