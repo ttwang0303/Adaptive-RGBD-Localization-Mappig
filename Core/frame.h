@@ -7,6 +7,7 @@
 #include <pcl/point_types.h>
 
 class Landmark;
+class Extractor;
 class Map;
 
 class Frame {
@@ -21,9 +22,9 @@ public:
     cv::Mat GetRotationInv();
     cv::Mat GetCameraCenter();
 
-    void DetectAndCompute(cv::Ptr<cv::FeatureDetector> pDetector, cv::Ptr<cv::DescriptorExtractor> pDescriptor);
+    void ExtractFeatures(Extractor* pExtractor);
 
-    void GridDetectAndCompute(cv::Ptr<cv::FeatureDetector> pDetector, cv::Ptr<cv::DescriptorExtractor> pDescriptor, int gridRows, int gridCols);
+    // void GridDetectAndCompute(cv::Ptr<cv::FeatureDetector> pDetector, cv::Ptr<cv::DescriptorExtractor> pDescriptor, int gridRows, int gridCols);
 
     void Detect(cv::Ptr<cv::FeatureDetector> pDetector);
 
@@ -38,7 +39,7 @@ public:
     cv::Mat UnprojectWorld(const size_t& i);
 
     // Iaicp test
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr Mat2Cloud();
+    // pcl::PointCloud<pcl::PointXYZRGB>::Ptr Mat2Cloud();
 
 public:
     bool mbIsKeyFrame;

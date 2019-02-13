@@ -1,4 +1,5 @@
 #include "frame.h"
+#include "Features/extractor.h"
 #include "Utils/constants.h"
 #include "dbscan.h"
 #include "landmark.h"
@@ -62,17 +63,12 @@ cv::Mat Frame::GetCameraCenter()
     return mOw.clone();
 }
 
-void Frame::DetectAndCompute(cv::Ptr<cv::FeatureDetector> pDetector, cv::Ptr<cv::DescriptorExtractor> pDescriptor)
+void Frame::ExtractFeatures(Extractor* pExtractor)
 {
-    pDetector->detect(mIm, mvKps);
-    if (mvKps.size() > nFeatures)
-        cv::KeyPointsFilter::retainBest(mvKps, nFeatures);
-
-    pDescriptor->compute(mIm, mvKps, mDescriptors);
+    pExtractor->Extract(mIm, cv::Mat(), mvKps, mDescriptors);
 
     N = mvKps.size();
     mvpLandmarks = vector<Landmark*>(N, static_cast<Landmark*>(nullptr));
-
     mvKps3Dc = vector<cv::Point3f>(N, cv::Point3f(0, 0, 0));
 
     for (size_t i = 0; i < N; ++i) {
@@ -89,73 +85,73 @@ void Frame::DetectAndCompute(cv::Ptr<cv::FeatureDetector> pDetector, cv::Ptr<cv:
     }
 }
 
-void Frame::GridDetectAndCompute(cv::Ptr<cv::FeatureDetector> pDetector, cv::Ptr<cv::DescriptorExtractor> pDescriptor, int gridRows, int gridCols)
-{
-    cv::Mat grayImage;
-    cv::cvtColor(mIm, grayImage, CV_BGR2GRAY);
+//void Frame::GridDetectAndCompute(cv::Ptr<cv::FeatureDetector> pDetector, cv::Ptr<cv::DescriptorExtractor> pDescriptor, int gridRows, int gridCols)
+//{
+//    cv::Mat grayImage;
+//    cv::cvtColor(mIm, grayImage, CV_BGR2GRAY);
 
-    std::vector<cv::KeyPoint> raw_keypoints;
-    int grayImageWidth = grayImage.cols;
-    int grayImageHeight = grayImage.rows;
+//    std::vector<cv::KeyPoint> raw_keypoints;
+//    int grayImageWidth = grayImage.cols;
+//    int grayImageHeight = grayImage.rows;
 
-    int maximalFeaturesInROI = nFeatures * 3 / (gridCols * gridRows);
+//    int maximalFeaturesInROI = nFeatures * 3 / (gridCols * gridRows);
 
-    // Let's divide image into boxes/rectangles
-    for (int k = 0; k < gridCols; k++) {
-        for (int i = 0; i < gridRows; i++) {
+//    // Let's divide image into boxes/rectangles
+//    for (int k = 0; k < gridCols; k++) {
+//        for (int i = 0; i < gridRows; i++) {
 
-            std::vector<cv::KeyPoint> keypointsInROI;
-            cv::Mat roiBGR(grayImage, cv::Rect(k * grayImageWidth / gridCols, i * grayImageHeight / gridRows, grayImageWidth / gridCols, grayImageHeight / gridRows));
+//            std::vector<cv::KeyPoint> keypointsInROI;
+//            cv::Mat roiBGR(grayImage, cv::Rect(k * grayImageWidth / gridCols, i * grayImageHeight / gridRows, grayImageWidth / gridCols, grayImageHeight / gridRows));
 
-            pDetector->detect(roiBGR, keypointsInROI);
+//            pDetector->detect(roiBGR, keypointsInROI);
 
-            // Sorting keypoints by the response to choose the bests
-            std::sort(keypointsInROI.begin(), keypointsInROI.end(), [](const cv::KeyPoint& p1, const cv::KeyPoint& p2) {
-                return p1.response > p2.response;
-            });
+//            // Sorting keypoints by the response to choose the bests
+//            std::sort(keypointsInROI.begin(), keypointsInROI.end(), [](const cv::KeyPoint& p1, const cv::KeyPoint& p2) {
+//                return p1.response > p2.response;
+//            });
 
-            // Adding to final keypoints
-            for (size_t j = 0; j < keypointsInROI.size() && j < maximalFeaturesInROI; j++) {
-                keypointsInROI[j].pt.x += float(k * grayImageWidth / gridCols);
-                keypointsInROI[j].pt.y += float(i * grayImageHeight / gridRows);
-                raw_keypoints.push_back(keypointsInROI[j]);
-            }
-        }
-    }
+//            // Adding to final keypoints
+//            for (size_t j = 0; j < keypointsInROI.size() && j < maximalFeaturesInROI; j++) {
+//                keypointsInROI[j].pt.x += float(k * grayImageWidth / gridCols);
+//                keypointsInROI[j].pt.y += float(i * grayImageHeight / gridRows);
+//                raw_keypoints.push_back(keypointsInROI[j]);
+//            }
+//        }
+//    }
 
-    // It is better to have them sorted according to their response strength
-    std::sort(raw_keypoints.begin(), raw_keypoints.end(), [](const cv::KeyPoint& p1, const cv::KeyPoint& p2) {
-        return p1.response > p2.response;
-    });
+//    // It is better to have them sorted according to their response strength
+//    std::sort(raw_keypoints.begin(), raw_keypoints.end(), [](const cv::KeyPoint& p1, const cv::KeyPoint& p2) {
+//        return p1.response > p2.response;
+//    });
 
-    if (raw_keypoints.size() > nFeatures)
-        raw_keypoints.resize(nFeatures);
+//    if (raw_keypoints.size() > nFeatures)
+//        raw_keypoints.resize(nFeatures);
 
-    mvKps = raw_keypoints;
-    double epsilon = 1.0;
-    DBScan dbscan(epsilon);
-    dbscan.run(mvKps);
+//    mvKps = raw_keypoints;
+//    double epsilon = 1.0;
+//    DBScan dbscan(epsilon);
+//    dbscan.run(mvKps);
 
-    pDescriptor->compute(grayImage, mvKps, mDescriptors);
+//    pDescriptor->compute(grayImage, mvKps, mDescriptors);
 
-    N = mvKps.size();
-    mvpLandmarks = vector<Landmark*>(N, static_cast<Landmark*>(nullptr));
+//    N = mvKps.size();
+//    mvpLandmarks = vector<Landmark*>(N, static_cast<Landmark*>(nullptr));
 
-    mvKps3Dc = vector<cv::Point3f>(N, cv::Point3f(0, 0, 0));
+//    mvKps3Dc = vector<cv::Point3f>(N, cv::Point3f(0, 0, 0));
 
-    for (int i = 0; i < N; ++i) {
-        const float v = mvKps[i].pt.y;
-        const float u = mvKps[i].pt.x;
+//    for (int i = 0; i < N; ++i) {
+//        const float v = mvKps[i].pt.y;
+//        const float u = mvKps[i].pt.x;
 
-        const float z = mDepth.at<float>(v, u);
-        if (z > 0) {
-            // KeyPoint in Camera coordinates
-            const float x = (u - cx) * z * invfx;
-            const float y = (v - cy) * z * invfy;
-            mvKps3Dc[i] = cv::Point3f(x, y, z);
-        }
-    }
-}
+//        const float z = mDepth.at<float>(v, u);
+//        if (z > 0) {
+//            // KeyPoint in Camera coordinates
+//            const float x = (u - cx) * z * invfx;
+//            const float y = (v - cy) * z * invfy;
+//            mvKps3Dc[i] = cv::Point3f(x, y, z);
+//        }
+//    }
+//}
 
 void Frame::Detect(cv::Ptr<cv::FeatureDetector> pDetector)
 {
@@ -194,38 +190,38 @@ void Frame::CreateCloud()
     }
 }
 
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr Frame::Mat2Cloud()
-{
-    if (mpCloud)
-        return mpCloud;
+//pcl::PointCloud<pcl::PointXYZRGB>::Ptr Frame::Mat2Cloud()
+//{
+//    if (mpCloud)
+//        return mpCloud;
 
-    mpCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZRGB>>();
-    mpCloud->points.resize(width * height);
+//    mpCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZRGB>>();
+//    mpCloud->points.resize(width * height);
 
-    for (size_t i = 0; i < width; i++) {
-        for (size_t j = 0; j < height; j++) {
-            pcl::PointXYZRGB pt;
-            if (!(mDepth.at<float>(j, i) == mDepth.at<float>(j, i))) {
-                pt.z = 0.f / 0.f;
-                mpCloud->points.at(j * width + i) = pt;
-                continue;
-            }
+//    for (size_t i = 0; i < width; i++) {
+//        for (size_t j = 0; j < height; j++) {
+//            pcl::PointXYZRGB pt;
+//            if (!(mDepth.at<float>(j, i) == mDepth.at<float>(j, i))) {
+//                pt.z = 0.f / 0.f;
+//                mpCloud->points.at(j * width + i) = pt;
+//                continue;
+//            }
 
-            pt.z = mDepth.at<float>(j, i);
-            pt.x = (float(i) - cx) * pt.z * invfx;
-            pt.y = (float(j) - cy) * pt.z * invfy;
+//            pt.z = mDepth.at<float>(j, i);
+//            pt.x = (float(i) - cx) * pt.z * invfx;
+//            pt.y = (float(j) - cy) * pt.z * invfy;
 
-            cv::Vec3b color = mIm.at<cv::Vec3b>(j, i);
-            pt.r = (int)color.val[0];
-            pt.g = (int)color.val[1];
-            pt.b = (int)color.val[2];
+//            cv::Vec3b color = mIm.at<cv::Vec3b>(j, i);
+//            pt.r = (int)color.val[0];
+//            pt.g = (int)color.val[1];
+//            pt.b = (int)color.val[2];
 
-            mpCloud->points.at(j * width + i) = pt;
-        }
-    }
+//            mpCloud->points.at(j * width + i) = pt;
+//        }
+//    }
 
-    return mpCloud;
-}
+//    return mpCloud;
+//}
 
 void Frame::VoxelGridFilterCloud(float resolution)
 {
@@ -257,7 +253,6 @@ void Frame::AddLandmark(Landmark* pLandmark, const size_t& idx)
 
 cv::Mat Frame::UnprojectWorld(const size_t& i)
 {
-
     const cv::Point3f& p3Dc = mvKps3Dc[i];
     cv::Mat x3Dc = (cv::Mat_<float>(3, 1) << p3Dc.x, p3Dc.y, p3Dc.z);
 

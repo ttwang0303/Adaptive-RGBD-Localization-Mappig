@@ -3,11 +3,12 @@
 #include "Core/map.h"
 #include "Drawer/pointclouddrawer.h"
 #include "Drawer/viewer.h"
+#include "Features/extractor.h"
+#include "Features/matcher.h"
 #include "Odometry/generalizedicp.h"
 #include "Odometry/ransac.h"
 #include "Utils/constants.h"
 #include "Utils/converter.h"
-#include "Utils/featureadjuster.h"
 #include "Utils/utils.h"
 #include <algorithm>
 #include <iostream>
@@ -20,7 +21,7 @@
 
 using namespace std;
 
-const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/living_room_traj1_frei_png/";
+const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset_freiburg1_room/";
 
 int main()
 {
@@ -54,38 +55,38 @@ int main()
          << endl;
 
     // This is a Feature-based method
-    cv::Ptr<cv::FeatureDetector> pDetector(CreateAdaptiveDetector("SURF"));
-    cv::Ptr<cv::DescriptorExtractor> pDescriptor(CreateDescriptor("BRIEF"));
-    cv::Ptr<cv::DescriptorMatcher> pMatcher = cv::BFMatcher::create(pDescriptor->defaultNorm());
+    shared_ptr<Extractor> extractor(new Extractor(Extractor::SURF, Extractor::BRIEF, Extractor::NORMAL));
+    shared_ptr<Matcher> matcher(new Matcher(0.9f));
+
+    // Store Landmarks and KeyFrames
+    shared_ptr<Map> pMap(new Map());
+
+    // Map a pose viewer
+    PointCloudDrawer* pCloudDrawer = new PointCloudDrawer(pMap.get());
+    Viewer* pViewer = new Viewer(pCloudDrawer);
+    thread* ptViewer = new thread(&Viewer::Run, pViewer);
+
+    // Odometry algorithms
+    Ransac sac(200, 20, 3.0f, 4);
+    GeneralizedICP icp(20, 0.07);
 
     ofstream f("CameraTrajectory.txt");
     f << fixed;
     Frame* prevFrame = nullptr;
     cv::Mat imColor, imDepth;
-
-    // Store Landmarks and KeyFrames
-    Map* pMap = new Map();
-
-    // Map a pose viewer
-    PointCloudDrawer* pCloudDrawer = new PointCloudDrawer(pMap);
-    Viewer* pViewer = new Viewer(pCloudDrawer);
-    thread* ptViewer = new thread(&Viewer::Run, pViewer);
-
-    Ransac sac(200, 20, 3.0f, 4);
-    GeneralizedICP icp(20, 0.07);
-
     for (size_t i = 0; i < nImages; i += 1) {
         imColor = cv::imread(baseDir + vImageFilenamesRGB[i], cv::IMREAD_COLOR);
         imDepth = cv::imread(baseDir + vImageFilenamesD[i], cv::IMREAD_UNCHANGED);
 
         Frame* currFrame = new Frame(imColor, imDepth, vTimestamps[i]);
-        currFrame->DetectAndCompute(pDetector, pDescriptor);
+        currFrame->ExtractFeatures(extractor.get());
 
         cv::Mat Tcw;
         if (i == 0) {
             Tcw = cv::Mat::eye(4, 4, CV_32F);
         } else {
-            vector<cv::DMatch> vMatches = Match(prevFrame, currFrame, pMatcher);
+            vector<cv::DMatch> vMatches;
+            matcher->KnnMatch(prevFrame, currFrame, vMatches);
 
             // Run RANSAC
             sac.Iterate(prevFrame, currFrame, vMatches);
@@ -111,7 +112,7 @@ int main()
 
             // Composition rule
             Tcw = Tcw * prevFrame->GetPose();
-            DrawMatches(prevFrame, currFrame, sac.mvInliers);
+            Matcher::DrawMatches(prevFrame, currFrame, sac.mvInliers);
         }
 
         // Update pose

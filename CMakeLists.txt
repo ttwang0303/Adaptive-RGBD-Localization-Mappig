@@ -79,18 +79,27 @@ include_directories(${PROJECT_SOURCE_DIR})
 add_library(${PROJECT_NAME} SHARED
 Utils/utils.cpp
 Utils/converter.cpp
-Utils/featureadjuster.cpp
+
 Odometry/ransac.cpp
 Odometry/generalizedicp.cpp
 Odometry/adaptivergbdlocalization.cpp
 Odometry/ransacpcl.cpp
 Odometry/kabsch.cpp
+
 Core/frame.cpp
 Core/dbscan.cpp
 Core/landmark.cpp
 Core/map.cpp
+
 Drawer/viewer.cpp
 Drawer/pointclouddrawer.cpp
+
+Features/matcher.cpp
+Features/extractor.cpp
+Features/detectoradjuster.cpp
+Features/statefulfeaturedetector.cpp
+Features/videodynamicadaptedfeaturedetector.cpp
+Features/videogridadaptedfeaturedetector.cpp
 )
 
 #add_library(icp SHARED
