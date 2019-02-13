@@ -85,6 +85,7 @@ Odometry/generalizedicp.cpp
 Odometry/adaptivergbdlocalization.cpp
 Odometry/ransacpcl.cpp
 Odometry/kabsch.cpp
+Odometry/odometry.cpp
 
 Core/frame.cpp
 Core/dbscan.cpp

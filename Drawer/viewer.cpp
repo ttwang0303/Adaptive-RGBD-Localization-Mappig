@@ -1,4 +1,5 @@
 #include "viewer.h"
+#include "Utils/constants.h"
 #include "pointclouddrawer.h"
 #include <pangolin/pangolin.h>
 #include <unistd.h>
@@ -23,7 +24,7 @@ void Viewer::Run()
     mbFinished = false;
     mbStopped = false;
 
-    pangolin::CreateWindowAndBind("Cloud Viewer", 1024, 768);
+    pangolin::CreateWindowAndBind("Viewer", 1024, 768);
 
     // 3D Mouse handler requires depth testing to be enabled
     glEnable(GL_DEPTH_TEST);
@@ -48,7 +49,10 @@ void Viewer::Run()
 
         d_cam.Activate(s_cam);
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-        mpCloudDrawer->DrawPointCloud();
+        mpCloudDrawer->DrawPointCloud(
+            DRAW_LANDMARKS, // Landmarks
+            DRAW_DENSECLOUD, // Dense cloud
+            DRAW_KFS); // KeyFrames
 
         pangolin::FinishFrame();
 

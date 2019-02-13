@@ -58,8 +58,8 @@ void Extractor::CreateAdaptiveDetector()
         pAdjuster = new DetectorAdjuster(mDetectorAlgorithm, 20, 2, 10000, 1.3, 0.7);
 
     const int minFeatures = 600;
-    const int maxFeatures = minFeatures * 1.6;
-    const int iterations = 6;
+    const int maxFeatures = minFeatures * 1.7;
+    const int iterations = 5;
     const int edgeTh = 31;
 
     const int gridResolution = 3;

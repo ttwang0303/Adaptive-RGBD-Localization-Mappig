@@ -5,23 +5,21 @@
 #include "Drawer/viewer.h"
 #include "Features/extractor.h"
 #include "Features/matcher.h"
-#include "Odometry/generalizedicp.h"
+#include "Odometry/odometry.h"
 #include "Odometry/ransac.h"
-#include "Utils/constants.h"
 #include "Utils/converter.h"
 #include "Utils/utils.h"
 #include <algorithm>
 #include <iostream>
 #include <numeric>
 #include <opencv2/opencv.hpp>
-#include <opencv2/xfeatures2d.hpp>
 #include <pangolin/pangolin.h>
 #include <sstream>
 #include <thread>
 
 using namespace std;
 
-const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset_freiburg1_room/";
+const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset_freiburg2_pioneer_slam3/";
 
 int main()
 {
@@ -32,7 +30,7 @@ int main()
     mCombinationsMap["ORB"] = { "BRISK", "ORB", "FREAK" };
     mCombinationsMap["SHI_TOMASI"] = { "BRISK", "ORB", "BRIEF", "FREAK", "SIFT", "LATCH" };
     mCombinationsMap["STAR"] = { "BRISK", "FREAK", "LATCH" };
-    mCombinationsMap["SURF"] = { "BRISK", "ORB", "FREAK" };
+    mCombinationsMap["SURF"] = { "BRISK", "BRIEF", "ORB", "FREAK" };
 
     // Read files
     vector<string> vImageFilenamesRGB;
@@ -55,20 +53,19 @@ int main()
          << endl;
 
     // This is a Feature-based method
-    shared_ptr<Extractor> extractor(new Extractor(Extractor::SURF, Extractor::BRIEF, Extractor::NORMAL));
+    shared_ptr<Extractor> extractor(new Extractor(Extractor::SURF, Extractor::BRIEF, Extractor::ADAPTIVE));
     shared_ptr<Matcher> matcher(new Matcher(0.9f));
 
     // Store Landmarks and KeyFrames
     shared_ptr<Map> pMap(new Map());
 
-    // Map a pose viewer
-    PointCloudDrawer* pCloudDrawer = new PointCloudDrawer(pMap.get());
-    Viewer* pViewer = new Viewer(pCloudDrawer);
-    thread* ptViewer = new thread(&Viewer::Run, pViewer);
+    // Map and pose viewer
+    shared_ptr<PointCloudDrawer> pCloudDrawer(new PointCloudDrawer(pMap.get()));
+    shared_ptr<Viewer> pViewer(new Viewer(pCloudDrawer.get()));
+    shared_ptr<thread> ptViewer(new thread(&Viewer::Run, pViewer.get()));
 
-    // Odometry algorithms
-    Ransac sac(200, 20, 3.0f, 4);
-    GeneralizedICP icp(20, 0.07);
+    // Odometry algorithm
+    shared_ptr<Odometry> pOdometry(new Odometry(Odometry::ADAPTIVE));
 
     ofstream f("CameraTrajectory.txt");
     f << fixed;
@@ -88,42 +85,22 @@ int main()
             vector<cv::DMatch> vMatches;
             matcher->KnnMatch(prevFrame, currFrame, vMatches);
 
-            // Run RANSAC
-            sac.Iterate(prevFrame, currFrame, vMatches);
-
-            // Refine with ICP
-            if (sac.mvInliers.size() < 20 || sac.rmse * 10.0f >= 7.0f) {
-                if (sac.rmse * 10.0f >= 20) {
-
-                    if (icp.Compute(sac.mpSourceCloud, sac.mpTargetCloud, Eigen::Matrix4f::Identity()))
-                        Tcw = Converter::toMat<float, 4, 4>(icp.mT12);
-                    else
-                        Tcw = cv::Mat::eye(4, 4, CV_32F);
-
-                } else {
-                    if (icp.Compute(sac.mpSourceCloud, sac.mpTargetCloud, sac.mT12))
-                        Tcw = Converter::toMat<float, 4, 4>(icp.mT12);
-                    else
-                        Tcw = Converter::toMat<float, 4, 4>(sac.mT12);
-                }
-            } else {
-                Tcw = Converter::toMat<float, 4, 4>(sac.mT12);
-            }
+            Tcw = pOdometry->Compute(prevFrame, currFrame, vMatches);
 
             // Composition rule
             Tcw = Tcw * prevFrame->GetPose();
-            Matcher::DrawMatches(prevFrame, currFrame, sac.mvInliers);
+            Matcher::DrawMatches(prevFrame, currFrame, pOdometry->mpRansac->mvInliers);
         }
 
         // Update pose
         currFrame->SetPose(Tcw);
 
         // Draw each 20 frames
-        if (currFrame->mnId % 20 == 1 && !sac.mvInliers.empty()) {
+        if (currFrame->mnId % 20 == 1 && !pOdometry->mpRansac->mvInliers.empty()) {
             currFrame->mbIsKeyFrame = true;
 
             // Create matched landmarks
-            for (const auto& m : sac.mvInliers) {
+            for (const auto& m : pOdometry->mpRansac->mvInliers) {
                 int idx = m.trainIdx;
                 cv::Mat x3Dw = currFrame->UnprojectWorld(idx);
                 Landmark* pNewLandmark = new Landmark(x3Dw, currFrame, idx);
@@ -141,6 +118,10 @@ int main()
         f << setprecision(6) << currFrame->mTimestamp << setprecision(7) << " " << t.at<float>(0) << " " << t.at<float>(1) << " " << t.at<float>(2)
           << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl;
 
+        cout << "\033[32m" << ((currFrame->mnId + 1) * 100) / nImages << " %"
+             << "\033[0m" << '\r';
+        cout.flush();
+
         if (prevFrame) {
             if (!prevFrame->mbIsKeyFrame)
                 delete prevFrame;
@@ -154,7 +135,7 @@ int main()
     pViewer->RequestFinish();
     while (!pViewer->isFinished())
         usleep(5000);
-    pangolin::BindToContext("Cloud Viewer");
+    pangolin::BindToContext("Viewer");
 
     pMap->Clear();
 

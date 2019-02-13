@@ -14,64 +14,50 @@ using namespace std;
 PointCloudDrawer::PointCloudDrawer(Map* pMap)
     : mpMap(pMap)
 {
-    //    mpSourceCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
-    //    mpTargetCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
     mpMapCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZRGB>>();
 
     mPointSize = 2.0f;
     mLineWidth = 0.9f;
+    mLineWidthGraph = 1.5f;
 }
 
-void PointCloudDrawer::DrawPointCloud()
+void PointCloudDrawer::DrawPointCloud(bool drawLandmarks, bool drawDenseCloud, bool drawKFs)
 {
     unique_lock<mutex> lock(mMutexPointCloud);
 
-    //    if (!mpSourceCloud->points.empty() && !mpTargetCloud->points.empty()) {
-    //        size_t N = mpSourceCloud->points.size();
-
-    //        for (size_t i = 0; i < N; ++i) {
-    //            glPointSize(mPointSize);
-    //            glBegin(GL_POINTS);
-
-    //            // Red for source
-    //            glColor3f(1.0f, 0.0f, 0.0f);
-    //            glVertex3f(mpSourceCloud->points[i].x, mpSourceCloud->points[i].y, mpSourceCloud->points[i].z);
-
-    //            // Blue for target
-    //            glColor3f(0.0f, 0.0f, 1.0f);
-    //            glVertex3f(mpTargetCloud->points[i].x, mpTargetCloud->points[i].y, mpTargetCloud->points[i].z);
-
-    //            glEnd();
-
-    //            // Draw connector
-    //            glLineWidth(mLineWidth);
-    //            glColor3f(0.0f, 0.75f, 0.0f);
-    //            glBegin(GL_LINES);
-
-    //            glVertex3f(mpSourceCloud->points[i].x, mpSourceCloud->points[i].y, mpSourceCloud->points[i].z);
-    //            glVertex3f(mpTargetCloud->points[i].x, mpTargetCloud->points[i].y, mpTargetCloud->points[i].z);
-
-    //            glEnd();
-    //        }
-
-    //        glEnd();
-    //    }
-
-    const float& w = 0.05;
-    const float h = w * 0.75;
-    const float z = w * 0.6;
-
     // Draw Landmarks
+    if (drawLandmarks)
+        DrawLandmarks();
+
+    vector<Frame*> vpKFs;
+    if (drawDenseCloud || drawKFs) {
+        vpKFs = mpMap->GetAllKeyFrames();
+        if (drawKFs)
+            sort(vpKFs.begin(), vpKFs.end(), [](const Frame* f1, const Frame* f2) { return f1->mnId < f2->mnId; });
+
+        for (Frame* pKF : vpKFs) {
+            // Draw dense cloud
+            if (drawDenseCloud)
+                DrawDenseCloud(pKF);
+
+            // Draw pose
+            if (drawKFs)
+                DrawPoseKF(pKF);
+        }
+
+        // Draw graph
+        if (drawKFs)
+            DrawConnections(vpKFs);
+    }
+}
+
+void PointCloudDrawer::DrawLandmarks()
+{
+    const vector<Landmark*> vpLandmarks = mpMap->GetAllLandmarks();
+
     glPointSize(mPointSize);
     glBegin(GL_POINTS);
     glColor3f(1.0f, 0.0f, 0.0f);
-
-    const vector<Landmark*> vpLandmarks = mpMap->GetAllLandmarks();
-    vector<Frame*> vpKFs = mpMap->GetAllKeyFrames();
-
-    sort(vpKFs.begin(), vpKFs.end(), [](const Frame* f1, const Frame* f2) {
-        return f1->mnId < f2->mnId;
-    });
 
     for (size_t i = 0; i < vpLandmarks.size(); i += 2) {
         cv::Mat pos = vpLandmarks[i]->GetWorldPos();
@@ -79,166 +65,106 @@ void PointCloudDrawer::DrawPointCloud()
     }
 
     glEnd();
+}
 
-    //    // Draw dense cloud
-    for (Frame* pKF : vpKFs) {
-        set<int>::iterator it = mKFids.find(pKF->mnId);
+void PointCloudDrawer::DrawDenseCloud(Frame* pKF)
+{
+    set<int>::iterator it = mKFids.find(pKF->mnId);
 
-        // pKF has been included
-        if (it != mKFids.end()) {
-            size_t N = mpMapCloud->points.size();
-            glPointSize(mPointSize - 0.5f);
-            glBegin(GL_POINTS);
+    // pKF has been included
+    if (it != mKFids.end()) {
+        size_t N = mpMapCloud->points.size();
+        glPointSize(mPointSize - 0.5f);
+        glBegin(GL_POINTS);
 
-            for (size_t i = 0; i < N; ++i) {
-                glColor3f(mpMapCloud->points[i].r / 255.0f, mpMapCloud->points[i].g / 255.0f, mpMapCloud->points[i].b / 255.0f);
-                glVertex3f(mpMapCloud->points[i].x, mpMapCloud->points[i].y, mpMapCloud->points[i].z);
-            }
-
-            glEnd();
+        for (size_t i = 0; i < N; ++i) {
+            glColor3f(mpMapCloud->points[i].r / 255.0f, mpMapCloud->points[i].g / 255.0f, mpMapCloud->points[i].b / 255.0f);
+            glVertex3f(mpMapCloud->points[i].x, mpMapCloud->points[i].y, mpMapCloud->points[i].z);
         }
-        // pKF hasn't been included
-        else {
-            mKFids.insert(pKF->mnId);
-
-            pKF->CreateCloud();
-            pKF->VoxelGridFilterCloud(0.04f);
-            pcl::PointCloud<pcl::PointXYZRGB>::Ptr mapPointsCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
-            pcl::transformPointCloud(*pKF->mpCloud, *mapPointsCloud, Converter::toMatrix4f(pKF->GetPose().inv()));
-
-            for (int i = 0; i < mapPointsCloud->points.size(); ++i)
-                mpMapCloud->points.push_back(mapPointsCloud->points[i]);
-
-            size_t N = mpMapCloud->points.size();
-            glPointSize(mPointSize - 0.5f);
-            glBegin(GL_POINTS);
-
-            for (size_t i = 0; i < N; ++i) {
-                glColor3f(mpMapCloud->points[i].r / 255.0f, mpMapCloud->points[i].g / 255.0f, mpMapCloud->points[i].b / 255.0f);
-                glVertex3f(mpMapCloud->points[i].x, mpMapCloud->points[i].y, mpMapCloud->points[i].z);
-            }
-
-            glEnd();
-        }
-
-        // Draw poses
-        cv::Mat Twc = pKF->GetPose().inv().t();
-        glPushMatrix();
-        glMultMatrixf(Twc.ptr<GLfloat>(0));
-        glLineWidth(1.5);
-        glColor3f(255.0f / 255.0f, 153.0f / 255.0f, 51.0f / 255.0f);
-        glBegin(GL_LINES);
-        glVertex3f(0, 0, 0);
-        glVertex3f(w, h, z);
-        glVertex3f(0, 0, 0);
-        glVertex3f(w, -h, z);
-        glVertex3f(0, 0, 0);
-        glVertex3f(-w, -h, z);
-        glVertex3f(0, 0, 0);
-        glVertex3f(-w, h, z);
-
-        glVertex3f(w, h, z);
-        glVertex3f(w, -h, z);
-
-        glVertex3f(-w, h, z);
-        glVertex3f(-w, -h, z);
-
-        glVertex3f(-w, h, z);
-        glVertex3f(w, h, z);
-
-        glVertex3f(-w, -h, z);
-        glVertex3f(w, -h, z);
-        glEnd();
-
-        glPopMatrix();
-
         glEnd();
     }
+    // pKF hasn't been included
+    else {
+        mKFids.insert(pKF->mnId);
 
-    glLineWidth(1.5f);
+        pKF->CreateCloud();
+        pKF->VoxelGridFilterCloud(0.04f);
+        pKF->StatisticalOutlierRemovalFilterCloud(50, 1.0);
+
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr mapPointsCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+        pcl::transformPointCloud(*pKF->mpCloud, *mapPointsCloud, Converter::toMatrix4f(pKF->GetPose().inv()));
+
+        for (int i = 0; i < mapPointsCloud->points.size(); ++i)
+            mpMapCloud->points.push_back(mapPointsCloud->points[i]);
+
+        size_t N = mpMapCloud->points.size();
+        glPointSize(mPointSize - 0.5f);
+        glBegin(GL_POINTS);
+
+        for (size_t i = 0; i < N; ++i) {
+            glColor3f(mpMapCloud->points[i].r / 255.0f, mpMapCloud->points[i].g / 255.0f, mpMapCloud->points[i].b / 255.0f);
+            glVertex3f(mpMapCloud->points[i].x, mpMapCloud->points[i].y, mpMapCloud->points[i].z);
+        }
+        glEnd();
+    }
+}
+
+void PointCloudDrawer::DrawPoseKF(Frame* pKF)
+{
+    static const float& w = 0.05;
+    static const float h = w * 0.75;
+    static const float z = w * 0.6;
+    static const float r = 255.0f / 255.0f;
+    static const float g = 153.0f / 255.0f;
+    static const float b = 51.0f / 255.0f;
+
+    cv::Mat Twc = pKF->GetPose().inv().t();
+    glPushMatrix();
+    glMultMatrixf(Twc.ptr<GLfloat>(0));
+    glLineWidth(mLineWidthGraph);
+    glColor3f(r, g, b);
+    glBegin(GL_LINES);
+    glVertex3f(0, 0, 0);
+    glVertex3f(w, h, z);
+    glVertex3f(0, 0, 0);
+    glVertex3f(w, -h, z);
+    glVertex3f(0, 0, 0);
+    glVertex3f(-w, -h, z);
+    glVertex3f(0, 0, 0);
+    glVertex3f(-w, h, z);
+
+    glVertex3f(w, h, z);
+    glVertex3f(w, -h, z);
+
+    glVertex3f(-w, h, z);
+    glVertex3f(-w, -h, z);
+
+    glVertex3f(-w, h, z);
+    glVertex3f(w, h, z);
+
+    glVertex3f(-w, -h, z);
+    glVertex3f(w, -h, z);
+    glEnd();
+
+    glPopMatrix();
+
+    glEnd();
+}
+
+void PointCloudDrawer::DrawConnections(std::vector<Frame*>& vpOrderedKFs)
+{
+    glLineWidth(mLineWidthGraph);
     glColor3f(0.0f, 0.75f, 1.0f);
     glBegin(GL_LINES);
-    for (size_t i = 0; i < vpKFs.size(); ++i) {
-        if (i < vpKFs.size() - 1) {
-            cv::Mat P = vpKFs[i]->GetCameraCenter();
-            cv::Mat P1 = vpKFs[i + 1]->GetCameraCenter();
+    for (size_t i = 0; i < vpOrderedKFs.size(); ++i) {
+        if (i < vpOrderedKFs.size() - 1) {
+            cv::Mat P = vpOrderedKFs[i]->GetCameraCenter();
+            cv::Mat P1 = vpOrderedKFs[i + 1]->GetCameraCenter();
 
             glVertex3f(P.at<float>(0), P.at<float>(1), P.at<float>(2));
             glVertex3f(P1.at<float>(0), P1.at<float>(1), P1.at<float>(2));
         }
     }
+
     glEnd();
-
-    //    if (!mpMapCloud->points.empty()) {
-    //        size_t N = mpMapCloud->points.size();
-
-    //        glPointSize(mPointSize - 1.0f);
-    //        glBegin(GL_POINTS);
-
-    //        for (size_t i = 0; i < N; ++i) {
-    //            glColor3f(mpMapCloud->points[i].r / 255.0f, mpMapCloud->points[i].g / 255.0f, mpMapCloud->points[i].b / 255.0f);
-    //            glVertex3f(mpMapCloud->points[i].x, mpMapCloud->points[i].y, mpMapCloud->points[i].z);
-    //        }
-
-    //        glEnd();
-
-    //        // Draw poses
-    //        for (int i = 1; i < mvPoses.size(); ++i) {
-    //            glPointSize(mPointSize * 4);
-    //            glBegin(GL_POINTS);
-    //            glColor3f(r, g, b);
-    //            glVertex3f(mvPoses[i].at<float>(0, 3), mvPoses[i].at<float>(1, 3), mvPoses[i].at<float>(2, 3));
-    //            glEnd();
-
-    //            if (i < mvPoses.size() - 1) {
-    //                glLineWidth(4);
-    //                glBegin(GL_LINES);
-
-    //                glVertex3f(mvPoses[i].at<float>(0, 3), mvPoses[i].at<float>(1, 3), mvPoses[i].at<float>(2, 3));
-    //                glVertex3f(mvPoses[i + 1].at<float>(0, 3), mvPoses[i + 1].at<float>(1, 3), mvPoses[i + 1].at<float>(2, 3));
-
-    //                glEnd();
-    //            }
-    //        }
-    //    }
-
-    //    glEnd();
 }
-
-//void PointCloudDrawer::UpdateSourceCloud(pcl::PointCloud<pcl::PointXYZ>& pSource)
-//{
-//    unique_lock<mutex> lock(mMutexPointCloud);
-//    pcl::copyPointCloud(pSource, *mpSourceCloud);
-//}
-
-//void PointCloudDrawer::UpdateTargetCloud(pcl::PointCloud<pcl::PointXYZ>& pTarget)
-//{
-//    unique_lock<mutex> lock(mMutexPointCloud);
-//    pcl::copyPointCloud(pTarget, *mpTargetCloud);
-//}
-
-//void PointCloudDrawer::UpdateMap(pcl::PointCloud<pcl::PointXYZRGB>::Ptr pMapCloud, const cv::Mat& pose)
-//{
-//    unique_lock<mutex> lock(mMutexPointCloud);
-
-//    pcl::VoxelGrid<pcl::PointXYZRGB> voxel;
-//    float resolution = 0.03f;
-//    voxel.setLeafSize(resolution, resolution, resolution);
-//    voxel.setInputCloud(pMapCloud);
-//    voxel.filter(*pMapCloud);
-
-//    pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
-//    sor.setInputCloud(pMapCloud);
-//    sor.setMeanK(50);
-//    sor.setStddevMulThresh(1.0);
-//    sor.filter(*pMapCloud);
-
-//    for (int i = 0; i < pMapCloud->points.size(); ++i)
-//        mpMapCloud->points.push_back(pMapCloud->points[i]);
-
-//    mvPoses.push_back(pose.clone());
-
-//    r = (double)rand() / (double)RAND_MAX;
-//    g = (double)rand() / (double)RAND_MAX;
-//    b = (double)rand() / (double)RAND_MAX;
-//}
