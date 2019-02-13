@@ -20,9 +20,9 @@ void DrawMatches(Frame* pF1, Frame* pF2, const std::vector<cv::DMatch>& m12, con
 
 void DrawKeyPoints(Frame* pF1, const int delay = 1);
 
-cv::Ptr<cv::DescriptorExtractor> CreateDetector(const std::string& detector);
+cv::Ptr<cv::FeatureDetector> CreateDetector(const std::string& detector);
 
-cv::Ptr<cv::FeatureDetector> CreateDescriptor(const std::string& descriptor);
+cv::Ptr<cv::DescriptorExtractor> CreateDescriptor(const std::string& descriptor);
 
 bool FindHomography(const Frame* pF1, const Frame* pF2, const std::vector<cv::DMatch>& vMatches12, cv::Mat& H, std::vector<uchar>& vRansacStatus);
 cv::Point2f ApplyHomography(const cv::Point2f& pt, const cv::Mat& H);
@@ -45,7 +45,6 @@ void VoxelGridFilterCloud(pcl::PointCloud<PointT>& cloud, float resolution)
 // New Features functions
 StatefulFeatureDetector* AdjusterWrapper(cv::Ptr<DetectorAdjuster> detadj, int min, int max);
 StatefulFeatureDetector* AdjustedGridWrapper(cv::Ptr<DetectorAdjuster> detadj);
-cv::Feature2D* CreateDetector2(const std::string& detectorName);
-cv::Ptr<cv::DescriptorExtractor> CreateDescriptor2(const std::string& descriptorName);
+cv::Feature2D* CreateAdaptiveDetector(const std::string& detectorName);
 
 #endif // UTILS_H

@@ -72,7 +72,7 @@ include_directories(${DLib_INCLUDE_DIRS})
 #------------------------------------------
 #                    Gnuplot-iostream
 #------------------------------------------
-include_directories(/home/antonio/Public/Libraries/gnuplot-iostream/)
+#include_directories(/home/antonio/Public/Libraries/gnuplot-iostream/)
 
 include_directories(${PROJECT_SOURCE_DIR})
 
@@ -85,10 +85,10 @@ Odometry/generalizedicp.cpp
 Odometry/adaptivergbdlocalization.cpp
 Odometry/ransacpcl.cpp
 Odometry/kabsch.cpp
-Odometry/iaicp/iaicp.cpp
 Core/frame.cpp
 Core/dbscan.cpp
 Core/landmark.cpp
+Core/map.cpp
 Drawer/viewer.cpp
 Drawer/pointclouddrawer.cpp
 )

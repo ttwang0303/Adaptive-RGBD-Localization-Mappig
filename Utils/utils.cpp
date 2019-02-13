@@ -115,9 +115,9 @@ cv::Ptr<cv::DescriptorExtractor> CreateDescriptor(const std::string& descriptor)
     } else if (descriptor == "LATCH"s) {
         pDescriptor = cv::xfeatures2d::LATCH::create();
     } else if (descriptor == "SURF"s) {
-        pDescriptor = cv::xfeatures2d::SURF::create();
+        pDescriptor = cv::xfeatures2d::SurfDescriptorExtractor::create();
     } else if (descriptor == "SIFT"s) {
-        pDescriptor = cv::xfeatures2d::SIFT::create();
+        pDescriptor = cv::xfeatures2d::SiftDescriptorExtractor::create();
     }
 
     return pDescriptor;
@@ -270,31 +270,31 @@ void AddNormal(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<pcl::P
 StatefulFeatureDetector* AdjusterWrapper(cv::Ptr<DetectorAdjuster> detadj, int min, int max)
 {
     int iterations = 5;
-    printf("Using adjusted keypoint detector with %d maximum iterations, keeping the number of keypoints between %d and %d\n", iterations, min, max);
+    // printf("Using adjusted keypoint detector with %d maximum iterations, keeping the number of keypoints between %d and %d\n", iterations, min, max);
 
-    return new VideoDynamicAdaptedFeatureDetector(detadj, min, max);
+    return new VideoDynamicAdaptedFeatureDetector(detadj, min, max, iterations);
 }
 
 StatefulFeatureDetector* AdjustedGridWrapper(cv::Ptr<DetectorAdjuster> detadj)
 {
     int min = 600;
-    int max = min * 1.5; //
+    int max = min * 1.5;
 
     int gridRes = 3;
     int gridcells = gridRes * gridRes;
     int gridmin = round(min / static_cast<float>(gridcells));
     int gridmax = round(max / static_cast<float>(gridcells));
-    printf("Using gridded keypoint detector with %dx%d cells, keeping %d keypoints in total\n", gridRes, gridRes, max);
+    // printf("Using gridded keypoint detector with %dx%d cells, keeping %d keypoints in total\n", gridRes, gridRes, max);
 
     StatefulFeatureDetector* detector = AdjusterWrapper(detadj, gridmin, gridmax);
     return new VideoGridAdaptedFeatureDetector(detector, max, gridRes, gridRes);
 }
 
-cv::Feature2D* CreateDetector2(const string& detectorName)
+cv::Feature2D* CreateAdaptiveDetector(const string& detectorName)
 {
     DetectorAdjuster* detAdj = nullptr;
 
-    cout << "Using " << detectorName << " keypoint detector." << endl;
+    // cout << "Using " << detectorName << " keypoint detector." << endl;
     if (detectorName == "FAST") {
         detAdj = new DetectorAdjuster("FAST", 20);
     } else if (detectorName == "SURF" || detectorName == "SURF128") {
@@ -305,31 +305,8 @@ cv::Feature2D* CreateDetector2(const string& detectorName)
         detAdj = new DetectorAdjuster("ORB", 20);
     } else {
         cout << "Unsupported Keypoint Detector. Using ORB as fallback" << endl;
-        return CreateDetector2("ORB");
+        return CreateAdaptiveDetector("ORB");
     }
 
     return AdjustedGridWrapper(detAdj);
-}
-
-cv::Ptr<cv::DescriptorExtractor> CreateDescriptor2(const string& descriptorName)
-{
-    if (descriptorName == "ORB") {
-        return cv::ORB::create();
-    } else if (descriptorName == "SIFT") {
-        return cv::xfeatures2d::SiftDescriptorExtractor::create();
-    } else if (descriptorName == "SURF") {
-        return cv::xfeatures2d::SurfDescriptorExtractor::create();
-    } else if (descriptorName == "SURF128") {
-        auto extractor = cv::xfeatures2d::SurfDescriptorExtractor::create();
-        extractor->setExtended(true);
-        return extractor;
-    } else if (descriptorName == "BRIEF") {
-        return cv::xfeatures2d::BriefDescriptorExtractor::create();
-    } else if (descriptorName == "FREAK") {
-        return cv::xfeatures2d::FREAK::create();
-    } else if (descriptorName == "BRISK") {
-        return cv::BRISK::create();
-    } else {
-        return CreateDescriptor2("ORB");
-    }
 }

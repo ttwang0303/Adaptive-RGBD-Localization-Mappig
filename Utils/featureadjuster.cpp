@@ -19,7 +19,7 @@ DetectorAdjuster::DetectorAdjuster(std::string detector_name, double initial_thr
 {
     if (!(detector_name_ == "SURF" || detector_name_ == "SIFT"
             || detector_name_ == "FAST" || detector_name_ == "ORB")) {
-        cerr << "Unknown Descriptor: " << detector_name_ << endl;
+        cerr << "Unknown Detector: " << detector_name_ << endl;
     }
 }
 

@@ -11,7 +11,8 @@ using namespace std;
 long unsigned int Frame::nNextId = 0;
 
 Frame::Frame(cv::Mat& imColor, cv::Mat& imDepth, double timestamp)
-    : mIm(imColor)
+    : mbIsKeyFrame(false)
+    , mIm(imColor)
     , mTimestamp(timestamp)
     , mpCloud(nullptr)
 {
@@ -33,6 +34,7 @@ Frame::Frame(cv::Mat& imColor)
 
 void Frame::SetPose(cv::Mat& Tcw)
 {
+    unique_lock<mutex> lock1(mMutexPose);
     mTcw = Tcw.clone();
 
     // Update pose matrices
@@ -40,6 +42,24 @@ void Frame::SetPose(cv::Mat& Tcw)
     mRwc = mRcw.t();
     mtcw = mTcw.rowRange(0, 3).col(3);
     mOw = -mRcw.t() * mtcw;
+}
+
+cv::Mat Frame::GetPose()
+{
+    unique_lock<mutex> lock1(mMutexPose);
+    return mTcw.clone();
+}
+
+cv::Mat Frame::GetRotationInv()
+{
+    unique_lock<mutex> lock1(mMutexPose);
+    return mRwc.clone();
+}
+
+cv::Mat Frame::GetCameraCenter()
+{
+    unique_lock<mutex> lock1(mMutexPose);
+    return mOw.clone();
 }
 
 void Frame::DetectAndCompute(cv::Ptr<cv::FeatureDetector> pDetector, cv::Ptr<cv::DescriptorExtractor> pDescriptor)
@@ -55,7 +75,7 @@ void Frame::DetectAndCompute(cv::Ptr<cv::FeatureDetector> pDetector, cv::Ptr<cv:
 
     mvKps3Dc = vector<cv::Point3f>(N, cv::Point3f(0, 0, 0));
 
-    for (int i = 0; i < N; ++i) {
+    for (size_t i = 0; i < N; ++i) {
         const float v = mvKps[i].pt.y;
         const float u = mvKps[i].pt.x;
 
@@ -233,4 +253,14 @@ void Frame::StatisticalOutlierRemovalFilterCloud(int meanK, double stddev)
 void Frame::AddLandmark(Landmark* pLandmark, const size_t& idx)
 {
     mvpLandmarks[idx] = pLandmark;
+}
+
+cv::Mat Frame::UnprojectWorld(const size_t& i)
+{
+
+    const cv::Point3f& p3Dc = mvKps3Dc[i];
+    cv::Mat x3Dc = (cv::Mat_<float>(3, 1) << p3Dc.x, p3Dc.y, p3Dc.z);
+
+    unique_lock<mutex> lock1(mMutexPose);
+    return mRwc * x3Dc + mOw;
 }

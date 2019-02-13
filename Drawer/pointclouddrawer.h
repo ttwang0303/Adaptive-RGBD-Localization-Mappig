@@ -6,30 +6,36 @@
 #include <pcl/common/io.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include <set>
+
+class Map;
 
 class PointCloudDrawer {
 public:
-    PointCloudDrawer();
+    PointCloudDrawer(Map* pMap);
 
     void DrawPointCloud();
 
-    void UpdateSourceCloud(pcl::PointCloud<pcl::PointXYZ>& pSource);
+    //    void UpdateSourceCloud(pcl::PointCloud<pcl::PointXYZ>& pSource);
 
-    void UpdateTargetCloud(pcl::PointCloud<pcl::PointXYZ>& pTarget);
+    //    void UpdateTargetCloud(pcl::PointCloud<pcl::PointXYZ>& pTarget);
 
-    void UpdateMap(pcl::PointCloud<pcl::PointXYZRGB>::Ptr pMapCloud, const cv::Mat& pose);
+    //    void UpdateMap(pcl::PointCloud<pcl::PointXYZRGB>::Ptr pMapCloud, const cv::Mat& pose);
 
 private:
+    Map* mpMap;
+
     float mPointSize;
     float mLineWidth;
 
     std::mutex mMutexPointCloud;
     std::mutex mMutexPose;
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr mpSourceCloud;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr mpTargetCloud;
+    //    pcl::PointCloud<pcl::PointXYZ>::Ptr mpSourceCloud;
+    //    pcl::PointCloud<pcl::PointXYZ>::Ptr mpTargetCloud;
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr mpMapCloud;
-    std::vector<cv::Mat> mvPoses;
+    std::set<int> mKFids;
+    //    std::vector<cv::Mat> mvPoses;
     float r, g, b;
 };
 

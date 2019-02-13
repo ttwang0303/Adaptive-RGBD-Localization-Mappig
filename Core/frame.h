@@ -1,11 +1,13 @@
 #ifndef FRAME_H
 #define FRAME_H
 
+#include <mutex>
 #include <opencv2/opencv.hpp>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
 class Landmark;
+class Map;
 
 class Frame {
 public:
@@ -14,6 +16,10 @@ public:
     Frame(cv::Mat& imColor);
 
     void SetPose(cv::Mat& Tcw);
+    cv::Mat GetPose();
+
+    cv::Mat GetRotationInv();
+    cv::Mat GetCameraCenter();
 
     void DetectAndCompute(cv::Ptr<cv::FeatureDetector> pDetector, cv::Ptr<cv::DescriptorExtractor> pDescriptor);
 
@@ -29,10 +35,14 @@ public:
 
     void AddLandmark(Landmark* pLandmark, const size_t& idx);
 
+    cv::Mat UnprojectWorld(const size_t& i);
+
     // Iaicp test
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr Mat2Cloud();
 
 public:
+    bool mbIsKeyFrame;
+
     cv::Mat mIm, mDepth;
     double mTimestamp;
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr mpCloud;
@@ -44,20 +54,23 @@ public:
     std::vector<Landmark*> mvpLandmarks;
 
     // Number of keypoints
-    int N;
-
-    // Camera pose.
-    cv::Mat mTcw;
+    size_t N;
 
     // Current and Next Frame id.
     static long unsigned int nNextId;
     long unsigned int mnId;
+
+protected:
+    // Camera pose.
+    cv::Mat mTcw;
 
     // Rotation, translation and camera center
     cv::Mat mRcw;
     cv::Mat mtcw;
     cv::Mat mRwc;
     cv::Mat mOw; //==mtwc (Camera center)
+
+    std::mutex mMutexPose;
 };
 
 #endif // FRAME_H

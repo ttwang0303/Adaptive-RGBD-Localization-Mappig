@@ -1,4 +1,8 @@
 #include "Core/frame.h"
+#include "Core/landmark.h"
+#include "Core/map.h"
+#include "Drawer/pointclouddrawer.h"
+#include "Drawer/viewer.h"
 #include "Odometry/generalizedicp.h"
 #include "Odometry/ransac.h"
 #include "Utils/constants.h"
@@ -20,6 +24,7 @@ const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset
 
 int main()
 {
+    // Good detector/descriptor combinations
     map<string, vector<string>> mCombinationsMap;
     mCombinationsMap["BRISK"] = { "BRISK", "ORB", "FREAK" };
     mCombinationsMap["FAST"] = { "SIFT" };
@@ -28,6 +33,7 @@ int main()
     mCombinationsMap["STAR"] = { "BRISK", "FREAK", "LATCH" };
     mCombinationsMap["SURF"] = { "BRISK", "ORB", "FREAK" };
 
+    // Read files
     vector<string> vImageFilenamesRGB;
     vector<string> vImageFilenamesD;
     vector<double> vTimestamps;
@@ -47,19 +53,23 @@ int main()
          << "\nImages in the sequence: " << nImages << endl
          << endl;
 
-    //    cv::Ptr<cv::FeatureDetector> pDetector = CreateDetector("FAST");
-    //    cv::Ptr<cv::DescriptorExtractor> pDescriptor = CreateDescriptor("ORB");
-    //    cv::Ptr<cv::DescriptorMatcher> pMatcher = cv::BFMatcher::create(pDescriptor->defaultNorm());
-
-    cv::Ptr<cv::FeatureDetector> pDetector(CreateDetector2("FAST"));
-    cv::Ptr<cv::DescriptorExtractor> pDescriptor(CreateDescriptor2("ORB"));
+    // This is a Feature-based method
+    cv::Ptr<cv::FeatureDetector> pDetector(CreateAdaptiveDetector("SURF"));
+    cv::Ptr<cv::DescriptorExtractor> pDescriptor(CreateDescriptor("BRIEF"));
     cv::Ptr<cv::DescriptorMatcher> pMatcher = cv::BFMatcher::create(pDescriptor->defaultNorm());
 
     ofstream f("CameraTrajectory.txt");
     f << fixed;
     Frame* prevFrame = nullptr;
     cv::Mat imColor, imDepth;
-    cv::Mat lastT12;
+
+    // Store Landmarks and KeyFrames
+    Map* pMap = new Map();
+
+    // Map a pose viewer
+    PointCloudDrawer* pCloudDrawer = new PointCloudDrawer(pMap);
+    Viewer* pViewer = new Viewer(pCloudDrawer);
+    thread* ptViewer = new thread(&Viewer::Run, pViewer);
 
     Ransac sac(200, 20, 3.0f, 4);
     GeneralizedICP icp(20, 0.07);
@@ -80,6 +90,7 @@ int main()
             // Run RANSAC
             sac.Iterate(prevFrame, currFrame, vMatches);
 
+            // Refine with ICP
             if (sac.mvInliers.size() < 20 || sac.rmse * 10.0f >= 7.0f) {
                 if (sac.rmse * 10.0f >= 20) {
 
@@ -98,28 +109,53 @@ int main()
                 Tcw = Converter::toMat<float, 4, 4>(sac.mT12);
             }
 
-            lastT12 = Tcw;
-            Tcw = Tcw * prevFrame->mTcw;
+            // Composition rule
+            Tcw = Tcw * prevFrame->GetPose();
             DrawMatches(prevFrame, currFrame, sac.mvInliers);
         }
 
+        // Update pose
         currFrame->SetPose(Tcw);
 
+        // Draw each 20 frames
+        if (currFrame->mnId % 20 == 1 && !sac.mvInliers.empty()) {
+            currFrame->mbIsKeyFrame = true;
+
+            // Create matched landmarks
+            for (const auto& m : sac.mvInliers) {
+                int idx = m.trainIdx;
+                cv::Mat x3Dw = currFrame->UnprojectWorld(idx);
+                Landmark* pNewLandmark = new Landmark(x3Dw, currFrame, idx);
+                pNewLandmark->AddObservation(currFrame, idx);
+                currFrame->AddLandmark(pNewLandmark, idx);
+                pMap->AddLandmark(pNewLandmark);
+            }
+            pMap->AddKeyFrame(currFrame);
+        }
+
         // Save results
-        const cv::Mat& R = currFrame->mRwc;
+        const cv::Mat& R = currFrame->GetRotationInv();
         vector<float> q = Converter::toQuaternion(R);
-        const cv::Mat& t = currFrame->mOw;
+        const cv::Mat& t = currFrame->GetCameraCenter();
         f << setprecision(6) << currFrame->mTimestamp << setprecision(7) << " " << t.at<float>(0) << " " << t.at<float>(1) << " " << t.at<float>(2)
           << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl;
 
-        if (prevFrame)
-            delete prevFrame;
-
+        if (prevFrame) {
+            if (!prevFrame->mbIsKeyFrame)
+                delete prevFrame;
+        }
         prevFrame = currFrame;
     }
 
     f.close();
     cout << "Trajectory saved!" << endl;
+
+    pViewer->RequestFinish();
+    while (!pViewer->isFinished())
+        usleep(5000);
+    pangolin::BindToContext("Cloud Viewer");
+
+    pMap->Clear();
 
     return 0;
 }
