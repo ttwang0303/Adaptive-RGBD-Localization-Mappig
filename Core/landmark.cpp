@@ -1,6 +1,7 @@
 #include "landmark.h"
 #include "Utils/utils.h"
 #include "frame.h"
+#include "keyframe.h"
 
 using namespace std;
 
@@ -17,11 +18,11 @@ Landmark::Landmark(const cv::Mat& Pos, Frame* pFrame, const int& idxF)
     pFrame->mDescriptors.row(idxF).copyTo(mDescriptor);
 }
 
-void Landmark::AddObservation(Frame* pFrame, size_t idx)
+void Landmark::AddObservation(KeyFrame* pKF, size_t idx)
 {
-    if (mObservations.count(pFrame))
+    if (mObservations.count(pKF))
         return;
-    mObservations[pFrame] = idx;
+    mObservations[pKF] = idx;
     nObs++;
 }
 

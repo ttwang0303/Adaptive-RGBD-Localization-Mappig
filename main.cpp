@@ -1,4 +1,6 @@
 #include "Core/frame.h"
+#include "Core/keyframe.h"
+#include "Core/keyframedatabase.h"
 #include "Core/landmark.h"
 #include "Core/map.h"
 #include "Drawer/pointclouddrawer.h"
@@ -7,6 +9,7 @@
 #include "Features/matcher.h"
 #include "Odometry/odometry.h"
 #include "Odometry/ransac.h"
+#include "Utils/common.h"
 #include "Utils/converter.h"
 #include "Utils/utils.h"
 #include <algorithm>
@@ -19,7 +22,7 @@
 
 using namespace std;
 
-const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset_freiburg2_pioneer_slam3/";
+const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset_freiburg1_xyz/";
 
 int main()
 {
@@ -53,80 +56,77 @@ int main()
          << endl;
 
     // This is a Feature-based method
-    shared_ptr<Extractor> extractor(new Extractor(Extractor::SURF, Extractor::BRIEF, Extractor::ADAPTIVE));
-    shared_ptr<Matcher> matcher(new Matcher(0.9f));
+    Extractor* pExtractor = new Extractor(Extractor::FAST, Extractor::BRIEF, Extractor::ADAPTIVE);
+    Matcher* pMatcher = new Matcher(0.9f);
 
     // Store Landmarks and KeyFrames
-    shared_ptr<Map> pMap(new Map());
+    Map* pMap = new Map();
+
+    Database* pDatabaseKF = new Database();
 
     // Map and pose viewer
-    shared_ptr<PointCloudDrawer> pCloudDrawer(new PointCloudDrawer(pMap.get()));
-    shared_ptr<Viewer> pViewer(new Viewer(pCloudDrawer.get()));
-    shared_ptr<thread> ptViewer(new thread(&Viewer::Run, pViewer.get()));
+    PointCloudDrawer* pCloudDrawer = new PointCloudDrawer(pMap);
+    Viewer* pViewer = new Viewer(pCloudDrawer);
+    thread* ptViewer = new thread(&Viewer::Run, pViewer);
 
     // Odometry algorithm
-    shared_ptr<Odometry> pOdometry(new Odometry(Odometry::ADAPTIVE));
+    Odometry* pOdometry = new Odometry(Odometry::ADAPTIVE);
 
     ofstream f("CameraTrajectory.txt");
     f << fixed;
-    Frame* prevFrame = nullptr;
+    Ptr<Frame> mLastFrame(new Frame);
     cv::Mat imColor, imDepth;
     for (size_t i = 0; i < nImages; i += 1) {
         imColor = cv::imread(baseDir + vImageFilenamesRGB[i], cv::IMREAD_COLOR);
         imDepth = cv::imread(baseDir + vImageFilenamesD[i], cv::IMREAD_UNCHANGED);
 
-        Frame* currFrame = new Frame(imColor, imDepth, vTimestamps[i]);
-        currFrame->ExtractFeatures(extractor.get());
+        Ptr<Frame> mCurrentFrame(new Frame(imColor, imDepth, vTimestamps[i]));
+        mCurrentFrame->ExtractFeatures(pExtractor);
 
         cv::Mat Tcw;
         if (i == 0) {
             Tcw = cv::Mat::eye(4, 4, CV_32F);
         } else {
             vector<cv::DMatch> vMatches;
-            matcher->KnnMatch(prevFrame, currFrame, vMatches);
+            pMatcher->KnnMatch(*mLastFrame, *mCurrentFrame, vMatches);
 
-            Tcw = pOdometry->Compute(prevFrame, currFrame, vMatches);
+            Tcw = pOdometry->Compute(*mLastFrame, *mCurrentFrame, vMatches);
 
             // Composition rule
-            Tcw = Tcw * prevFrame->GetPose();
-            Matcher::DrawMatches(prevFrame, currFrame, pOdometry->mpRansac->mvInliers);
+            Tcw = Tcw * mLastFrame->GetPose();
+            Matcher::DrawMatches(*mLastFrame, *mCurrentFrame, pOdometry->mpRansac->mvInliers);
         }
 
         // Update pose
-        currFrame->SetPose(Tcw);
+        mCurrentFrame->SetPose(Tcw);
 
         // Draw each 20 frames
-        if (currFrame->mnId % 20 == 1 && !pOdometry->mpRansac->mvInliers.empty()) {
-            currFrame->mbIsKeyFrame = true;
+        if (mCurrentFrame->mnId % 20 == 1 && !pOdometry->mpRansac->mvInliers.empty()) {
+            KeyFrame* pKF = new KeyFrame(*mCurrentFrame, pMap, pDatabaseKF);
 
             // Create matched landmarks
             for (const auto& m : pOdometry->mpRansac->mvInliers) {
                 int idx = m.trainIdx;
-                cv::Mat x3Dw = currFrame->UnprojectWorld(idx);
-                Landmark* pNewLandmark = new Landmark(x3Dw, currFrame, idx);
-                pNewLandmark->AddObservation(currFrame, idx);
-                currFrame->AddLandmark(pNewLandmark, idx);
+                cv::Mat x3Dw = mCurrentFrame->UnprojectWorld(idx);
+                Landmark* pNewLandmark = new Landmark(x3Dw, mCurrentFrame.get(), idx);
+                // mCurrentFrame->AddLandmark(pNewLandmark, idx);
                 pMap->AddLandmark(pNewLandmark);
             }
-            pMap->AddKeyFrame(currFrame);
+            pMap->AddKeyFrame(pKF);
         }
 
         // Save results
-        const cv::Mat& R = currFrame->GetRotationInv();
+        const cv::Mat& R = mCurrentFrame->GetRotationInv();
         vector<float> q = Converter::toQuaternion(R);
-        const cv::Mat& t = currFrame->GetCameraCenter();
-        f << setprecision(6) << currFrame->mTimestamp << setprecision(7) << " " << t.at<float>(0) << " " << t.at<float>(1) << " " << t.at<float>(2)
+        const cv::Mat& t = mCurrentFrame->GetCameraCenter();
+        f << setprecision(6) << mCurrentFrame->mTimestamp << setprecision(7) << " " << t.at<float>(0) << " " << t.at<float>(1) << " " << t.at<float>(2)
           << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl;
 
-        cout << "\033[32m" << ((currFrame->mnId + 1) * 100) / nImages << " %"
-             << "\033[0m" << '\r';
+        cout << GREEN << ((mCurrentFrame->mnId + 1) * 100) / nImages << " %"
+             << RESET << '\r';
         cout.flush();
 
-        if (prevFrame) {
-            if (!prevFrame->mbIsKeyFrame)
-                delete prevFrame;
-        }
-        prevFrame = currFrame;
+        mLastFrame = mCurrentFrame;
     }
 
     f.close();
@@ -138,6 +138,16 @@ int main()
     pangolin::BindToContext("Viewer");
 
     pMap->Clear();
+    ptViewer->join();
+
+    delete pExtractor;
+    delete pMatcher;
+    delete pMap;
+    delete pDatabaseKF;
+    delete pOdometry;
+    delete ptViewer;
+    delete pViewer;
+    delete pCloudDrawer;
 
     return 0;
 }

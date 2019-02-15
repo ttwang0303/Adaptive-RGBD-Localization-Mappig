@@ -1,5 +1,5 @@
 #include "extractor.h"
-#include "Utils/constants.h"
+#include "Utils/common.h"
 #include "detectoradjuster.h"
 #include "statefulfeaturedetector.h"
 #include "videodynamicadaptedfeaturedetector.h"

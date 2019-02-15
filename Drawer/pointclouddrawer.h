@@ -10,7 +10,7 @@
 
 class Landmark;
 class Map;
-class Frame;
+class KeyFrame;
 
 class PointCloudDrawer {
 public:
@@ -20,9 +20,9 @@ public:
 
 private:
     void DrawLandmarks();
-    void DrawDenseCloud(Frame* pKF);
-    void DrawPoseKF(Frame* pKF);
-    void DrawConnections(std::vector<Frame*>& vpOrderedKFs);
+    void DrawDenseCloud(KeyFrame* pKF);
+    void DrawPoseKF(KeyFrame* pKF);
+    void DrawConnections(std::vector<KeyFrame*>& vpOrderedKFs);
 
     Map* mpMap;
 

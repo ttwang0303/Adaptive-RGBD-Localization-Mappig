@@ -1,5 +1,5 @@
 #include "pointclouddrawer.h"
-#include "Core/frame.h"
+#include "Core/keyframe.h"
 #include "Core/landmark.h"
 #include "Core/map.h"
 #include "Utils/converter.h"
@@ -29,13 +29,16 @@ void PointCloudDrawer::DrawPointCloud(bool drawLandmarks, bool drawDenseCloud, b
     if (drawLandmarks)
         DrawLandmarks();
 
-    vector<Frame*> vpKFs;
+    vector<KeyFrame*> vpKFs;
     if (drawDenseCloud || drawKFs) {
         vpKFs = mpMap->GetAllKeyFrames();
-        if (drawKFs)
-            sort(vpKFs.begin(), vpKFs.end(), [](const Frame* f1, const Frame* f2) { return f1->mnId < f2->mnId; });
+        if (vpKFs.empty())
+            return;
 
-        for (Frame* pKF : vpKFs) {
+        if (drawKFs)
+            sort(vpKFs.begin(), vpKFs.end(), [](const KeyFrame* f1, const KeyFrame* f2) { return f1->mnId < f2->mnId; });
+
+        for (KeyFrame* pKF : vpKFs) {
             // Draw dense cloud
             if (drawDenseCloud)
                 DrawDenseCloud(pKF);
@@ -54,12 +57,14 @@ void PointCloudDrawer::DrawPointCloud(bool drawLandmarks, bool drawDenseCloud, b
 void PointCloudDrawer::DrawLandmarks()
 {
     const vector<Landmark*> vpLandmarks = mpMap->GetAllLandmarks();
+    if (vpLandmarks.empty())
+        return;
 
     glPointSize(mPointSize);
     glBegin(GL_POINTS);
     glColor3f(1.0f, 0.0f, 0.0f);
 
-    for (size_t i = 0; i < vpLandmarks.size(); i += 2) {
+    for (size_t i = 0; i < vpLandmarks.size(); i++) {
         cv::Mat pos = vpLandmarks[i]->GetWorldPos();
         glVertex3f(pos.at<float>(0), pos.at<float>(1), pos.at<float>(2));
     }
@@ -67,7 +72,7 @@ void PointCloudDrawer::DrawLandmarks()
     glEnd();
 }
 
-void PointCloudDrawer::DrawDenseCloud(Frame* pKF)
+void PointCloudDrawer::DrawDenseCloud(KeyFrame* pKF)
 {
     set<int>::iterator it = mKFids.find(pKF->mnId);
 
@@ -109,7 +114,7 @@ void PointCloudDrawer::DrawDenseCloud(Frame* pKF)
     }
 }
 
-void PointCloudDrawer::DrawPoseKF(Frame* pKF)
+void PointCloudDrawer::DrawPoseKF(KeyFrame* pKF)
 {
     static const float& w = 0.05;
     static const float h = w * 0.75;
@@ -151,7 +156,7 @@ void PointCloudDrawer::DrawPoseKF(Frame* pKF)
     glEnd();
 }
 
-void PointCloudDrawer::DrawConnections(std::vector<Frame*>& vpOrderedKFs)
+void PointCloudDrawer::DrawConnections(std::vector<KeyFrame*>& vpOrderedKFs)
 {
     glLineWidth(mLineWidthGraph);
     glColor3f(0.0f, 0.75f, 1.0f);

@@ -5,17 +5,17 @@
 #include <set>
 #include <vector>
 
-class Frame;
+class KeyFrame;
 class Landmark;
 
 class Map {
 public:
     Map();
 
-    void AddKeyFrame(Frame* pKF);
+    void AddKeyFrame(KeyFrame* pKF);
     void AddLandmark(Landmark* pLMK);
 
-    std::vector<Frame*> GetAllKeyFrames();
+    std::vector<KeyFrame*> GetAllKeyFrames();
     std::vector<Landmark*> GetAllLandmarks();
 
     long unsigned int LandmarksInMap();
@@ -27,7 +27,7 @@ public:
 
 protected:
     std::set<Landmark*> mspLandmarks;
-    std::set<Frame*> mspKeyFrames;
+    std::set<KeyFrame*> mspKeyFrames;
 
     std::mutex mMutexMap;
 };

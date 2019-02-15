@@ -28,13 +28,13 @@ Odometry::~Odometry()
         delete mpGicp;
 }
 
-cv::Mat Odometry::Compute(Frame* pF1, Frame* pF2, const vector<cv::DMatch>& vMatches12)
+cv::Mat Odometry::Compute(Frame& pF1, Frame& pF2, const vector<cv::DMatch>& vMatches12)
 {
     cv::Mat T12;
 
     if (mOdometryAlgorithm == ADAPTIVE) {
         // Run RANSAC
-        mpRansac->Iterate(pF1, pF2, vMatches12);
+        mpRansac->Iterate(&pF1, &pF2, vMatches12);
 
         // Refine with ICP
         if (mpRansac->mvInliers.size() < 20 || mpRansac->rmse * 10.0f >= 7.0f) {
@@ -55,7 +55,7 @@ cv::Mat Odometry::Compute(Frame* pF1, Frame* pF2, const vector<cv::DMatch>& vMat
             T12 = Converter::toMat<float, 4, 4>(mpRansac->mT12);
         }
     } else if (mOdometryAlgorithm == RANSAC) {
-        mpRansac->Iterate(pF1, pF2, vMatches12);
+        mpRansac->Iterate(&pF1, &pF2, vMatches12);
         T12 = Converter::toMat<float, 4, 4>(mpRansac->mT12);
     } else if (mOdometryAlgorithm == ICP) {
         // Not implemented yet

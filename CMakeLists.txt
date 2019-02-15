@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
-project(adaptive-rgbd-localization)
+project(ASLAM)
 
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_CXX_STANDARD 17)
@@ -57,17 +57,18 @@ link_libraries(${PCL_LIBRARY_DIRS})
 find_package(Pangolin REQUIRED)
 include_directories(${Pangolin_INCLUDE_DIRS})
 
+#------------------------------------------
+#                    OpenMP
+#------------------------------------------
 find_package(OpenMP)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 
 #------------------------------------------
-#                    DBoW2
+#                    DBoW3
 #------------------------------------------
-find_package(DBoW2 REQUIRED)
-include_directories(${DBoW2_INCLUDE_DIRS})
-find_package(DLib REQUIRED)
-include_directories(${DLib_INCLUDE_DIRS})
+find_package( DBoW3 REQUIRED )
+include_directories( ${DBoW3_INCLUDE_DIRS} )
 
 #------------------------------------------
 #                    Gnuplot-iostream
@@ -76,7 +77,7 @@ include_directories(${DLib_INCLUDE_DIRS})
 
 include_directories(${PROJECT_SOURCE_DIR})
 
-add_library(${PROJECT_NAME} SHARED
+add_library(${PROJECT_NAME}
 Utils/utils.cpp
 Utils/converter.cpp
 
@@ -91,6 +92,8 @@ Core/frame.cpp
 Core/dbscan.cpp
 Core/landmark.cpp
 Core/map.cpp
+Core/keyframe.cpp
+Core/keyframedatabase.cpp
 
 Drawer/viewer.cpp
 Drawer/pointclouddrawer.cpp
@@ -125,7 +128,7 @@ target_link_libraries(${PROJECT_NAME}
     ${CSPARSE_LIBRARY}
     ${Pangolin_LIBRARIES}
     ${DLib_LIBS}
-    ${DBoW2_LIBS})
+    ${DBoW3_LIBS})
 
 add_executable(main main.cpp)
 target_link_libraries(main ${PROJECT_NAME})

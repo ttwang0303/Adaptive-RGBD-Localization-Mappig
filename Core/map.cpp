@@ -1,5 +1,5 @@
 #include "map.h"
-#include "frame.h"
+#include "keyframe.h"
 #include "landmark.h"
 
 using namespace std;
@@ -8,7 +8,7 @@ Map::Map()
 {
 }
 
-void Map::AddKeyFrame(Frame* pKF)
+void Map::AddKeyFrame(KeyFrame* pKF)
 {
     unique_lock<mutex> lock(mMutexMap);
     mspKeyFrames.insert(pKF);
@@ -20,13 +20,13 @@ void Map::AddLandmark(Landmark* pLMK)
     mspLandmarks.insert(pLMK);
 }
 
-std::vector<Frame*> Map::GetAllKeyFrames()
+vector<KeyFrame*> Map::GetAllKeyFrames()
 {
     unique_lock<mutex> lock(mMutexMap);
-    return vector<Frame*>(mspKeyFrames.begin(), mspKeyFrames.end());
+    return vector<KeyFrame*>(mspKeyFrames.begin(), mspKeyFrames.end());
 }
 
-std::vector<Landmark*> Map::GetAllLandmarks()
+vector<Landmark*> Map::GetAllLandmarks()
 {
     unique_lock<mutex> lock(mMutexMap);
     return vector<Landmark*>(mspLandmarks.begin(), mspLandmarks.end());
@@ -49,7 +49,7 @@ void Map::Clear()
     for (set<Landmark*>::iterator sit = mspLandmarks.begin(); sit != mspLandmarks.end(); sit++)
         delete *sit;
 
-    for (set<Frame*>::iterator sit = mspKeyFrames.begin(); sit != mspKeyFrames.end(); sit++)
+    for (set<KeyFrame*>::iterator sit = mspKeyFrames.begin(); sit != mspKeyFrames.end(); sit++)
         delete *sit;
 
     mspLandmarks.clear();

@@ -6,6 +6,7 @@
 #include <opencv2/core.hpp>
 
 class Frame;
+class KeyFrame;
 
 class Landmark {
 public:
@@ -14,7 +15,7 @@ public:
     void SetWorldPos(const cv::Mat& Pos);
     cv::Mat GetWorldPos();
 
-    void AddObservation(Frame* pFrame, size_t idx);
+    void AddObservation(KeyFrame* pKF, size_t idx);
     int Observations();
 
 public:

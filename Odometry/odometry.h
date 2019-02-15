@@ -18,7 +18,7 @@ public:
     Odometry(const eAlgorithm& algorithm);
     ~Odometry();
 
-    cv::Mat Compute(Frame* pF1, Frame* pF2, const std::vector<cv::DMatch>& vMatches12);
+    cv::Mat Compute(Frame& pF1, Frame& pF2, const std::vector<cv::DMatch>& vMatches12);
 
     Ransac* mpRansac;
     GeneralizedICP* mpGicp;
