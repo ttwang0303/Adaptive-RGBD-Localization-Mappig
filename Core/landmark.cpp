@@ -1,6 +1,5 @@
 #include "landmark.h"
 #include "Utils/utils.h"
-#include "frame.h"
 #include "keyframe.h"
 
 using namespace std;
@@ -8,14 +7,14 @@ using namespace std;
 long unsigned int Landmark::nNextId = 0;
 mutex Landmark::mGlobalMutex;
 
-Landmark::Landmark(const cv::Mat& Pos, Frame* pFrame, const int& idxF)
-    : mnFirstFrame(pFrame->mnId)
+Landmark::Landmark(const cv::Mat& Pos, KeyFrame* pKF, const int& idx)
+    : mnFirstFrame(pKF->GetId())
     , nObs(0)
 {
     Pos.copyTo(mWorldPos);
     mnId = nNextId++;
 
-    pFrame->mDescriptors.row(idxF).copyTo(mDescriptor);
+    pKF->mDescriptors.row(idx).copyTo(mDescriptor);
 }
 
 void Landmark::AddObservation(KeyFrame* pKF, size_t idx)

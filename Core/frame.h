@@ -51,6 +51,8 @@ public:
     // Backprojects a keypoint (if depth info available) into 3D world coordinates
     cv::Mat UnprojectWorld(const size_t& i);
 
+    long unsigned int GetId();
+
     // Copy operator
     const Frame& operator=(Frame& frame);
 
@@ -74,9 +76,10 @@ public:
 
     // Current and Next Frame id.
     static long unsigned int nNextId;
-    long unsigned int mnId;
 
 protected:
+    long unsigned int mnId;
+
     // Camera pose.
     cv::Mat mTcw;
 
@@ -91,5 +94,6 @@ protected:
 
     std::mutex mMutexPose;
     std::mutex mMutexFeatures;
+    std::mutex mMutexId;
 };
 #endif // FRAME_H

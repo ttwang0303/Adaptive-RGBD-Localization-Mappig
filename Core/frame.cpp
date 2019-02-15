@@ -19,6 +19,7 @@ Frame::Frame(cv::Mat& imColor, cv::Mat& imDepth, double timestamp)
     , mpCloud(nullptr)
 {
     // Frame ID
+    unique_lock<mutex> lock(mMutexId);
     mnId = nNextId++;
 
     imDepth.convertTo(mImDepth, CV_32F, depthFactor);
@@ -31,6 +32,7 @@ Frame::Frame(cv::Mat& imColor)
     , mpCloud(nullptr)
 {
     // Frame ID
+    unique_lock<mutex> lock(mMutexId);
     mnId = nNextId++;
 }
 
@@ -213,6 +215,12 @@ cv::Mat Frame::UnprojectWorld(const size_t& i)
         return cv::Mat();
 }
 
+unsigned long Frame::GetId()
+{
+    unique_lock<mutex> lock(mMutexId);
+    return mnId;
+}
+
 const Frame& Frame::operator=(Frame& frame)
 {
     if (&frame != this) {
@@ -225,7 +233,7 @@ const Frame& Frame::operator=(Frame& frame)
         mBowVec = frame.mBowVec;
         mFeatVec = frame.mFeatVec;
         N = frame.N;
-        mnId = frame.mnId;
+        mnId = frame.GetId();
 
         if (frame.mpCloud)
             mpCloud = frame.mpCloud;

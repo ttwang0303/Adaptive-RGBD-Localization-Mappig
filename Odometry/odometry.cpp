@@ -10,12 +10,12 @@ Odometry::Odometry(const eAlgorithm& algorithm)
 {
     if (algorithm == ADAPTIVE) {
         mpRansac = new Ransac(200, 20, 3.0f, 4);
-        mpGicp = new GeneralizedICP(20, 0.07);
+        mpGicp = new GeneralizedICP(10, 0.07);
     } else if (algorithm == RANSAC) {
         mpRansac = new Ransac(200, 20, 3.0f, 4);
         mpGicp = nullptr;
     } else if (algorithm == ICP) {
-        mpGicp = new GeneralizedICP(20, 0.07);
+        mpGicp = new GeneralizedICP(10, 0.07);
         mpRansac = nullptr;
     }
 }

@@ -5,12 +5,11 @@
 #include <mutex>
 #include <opencv2/core.hpp>
 
-class Frame;
 class KeyFrame;
 
 class Landmark {
 public:
-    Landmark(const cv::Mat& Pos, Frame* pFrame, const int& idxF);
+    Landmark(const cv::Mat& Pos, KeyFrame* pKF, const int& idx);
 
     void SetWorldPos(const cv::Mat& Pos);
     cv::Mat GetWorldPos();
@@ -31,7 +30,7 @@ private:
     cv::Mat mWorldPos;
 
     // Frames observing the point and associated index in Frame
-    std::map<Frame*, size_t> mObservations;
+    std::map<KeyFrame*, size_t> mObservations;
 
     // Best descriptor to fast matching
     cv::Mat mDescriptor;

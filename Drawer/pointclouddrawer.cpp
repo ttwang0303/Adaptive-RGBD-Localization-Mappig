@@ -36,7 +36,7 @@ void PointCloudDrawer::DrawPointCloud(bool drawLandmarks, bool drawDenseCloud, b
             return;
 
         if (drawKFs)
-            sort(vpKFs.begin(), vpKFs.end(), [](const KeyFrame* f1, const KeyFrame* f2) { return f1->mnId < f2->mnId; });
+            sort(vpKFs.begin(), vpKFs.end(), [](KeyFrame* f1, KeyFrame* f2) { return f1->GetId() < f2->GetId(); });
 
         for (KeyFrame* pKF : vpKFs) {
             // Draw dense cloud
@@ -74,7 +74,7 @@ void PointCloudDrawer::DrawLandmarks()
 
 void PointCloudDrawer::DrawDenseCloud(KeyFrame* pKF)
 {
-    set<int>::iterator it = mKFids.find(pKF->mnId);
+    set<int>::iterator it = mKFids.find(pKF->GetId());
 
     // pKF has been included
     if (it != mKFids.end()) {
@@ -90,7 +90,7 @@ void PointCloudDrawer::DrawDenseCloud(KeyFrame* pKF)
     }
     // pKF hasn't been included
     else {
-        mKFids.insert(pKF->mnId);
+        mKFids.insert(pKF->GetId());
 
         pKF->CreateCloud();
         pKF->VoxelGridFilterCloud(0.04f);

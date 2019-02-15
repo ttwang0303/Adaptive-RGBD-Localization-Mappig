@@ -7,7 +7,9 @@ using namespace std;
 long unsigned int KeyFrame::nNextKFid = 0;
 
 KeyFrame::KeyFrame(Frame& frame, Map* pMap, Database* pKFDB)
-    : mnFrameId(frame.mnId)
+    : mnFrameId(frame.GetId())
+    , mnLoopQuery(0)
+    , mnLoopWords(0)
 {
     mImColor = frame.mImColor;
     mImDepth = frame.mImDepth;
@@ -28,5 +30,6 @@ KeyFrame::KeyFrame(Frame& frame, Map* pMap, Database* pKFDB)
 
     mvpLandmarks = frame.GetLandmarksMatched();
 
+    unique_lock<mutex> lock(mMutexId);
     mnId = nNextKFid++;
 }

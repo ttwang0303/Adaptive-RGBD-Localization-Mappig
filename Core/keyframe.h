@@ -18,6 +18,11 @@ public:
     static long unsigned int nNextKFid;
     const long unsigned int mnFrameId;
 
+    // Used by Database
+    long unsigned int mnLoopQuery;
+    int mnLoopWords;
+    float mLoopScore;
+
 protected:
     // BoW
     Database* mpKeyFrameDB;

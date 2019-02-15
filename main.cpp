@@ -23,6 +23,7 @@
 using namespace std;
 
 const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset_freiburg1_xyz/";
+const string vocDir = "/home/antonio/voc_fr1_ORB_ORB.yml.gz";
 
 int main()
 {
@@ -56,13 +57,22 @@ int main()
          << endl;
 
     // This is a Feature-based method
-    Extractor* pExtractor = new Extractor(Extractor::FAST, Extractor::BRIEF, Extractor::ADAPTIVE);
+    Extractor* pExtractor = new Extractor(Extractor::ORB, Extractor::ORB, Extractor::ADAPTIVE);
     Matcher* pMatcher = new Matcher(0.9f);
 
     // Store Landmarks and KeyFrames
     Map* pMap = new Map();
 
-    Database* pDatabaseKF = new Database();
+    // Place recognition (Loop detection)
+    cout << "Loading vocabulary...";
+    cout.flush();
+    DBoW3::Vocabulary* pVocabulary = new DBoW3::Vocabulary(vocDir);
+    if (pVocabulary->empty()) {
+        cout << "Wrong vocab path!" << endl;
+        terminate();
+    }
+    cout << " done." << endl;
+    Database* pDatabaseKF = new Database(pVocabulary);
 
     // Map and pose viewer
     PointCloudDrawer* pCloudDrawer = new PointCloudDrawer(pMap);
@@ -70,16 +80,18 @@ int main()
     thread* ptViewer = new thread(&Viewer::Run, pViewer);
 
     // Odometry algorithm
-    Odometry* pOdometry = new Odometry(Odometry::ADAPTIVE);
+    Odometry* pOdometry = new Odometry(Odometry::RANSAC);
 
     ofstream f("CameraTrajectory.txt");
     f << fixed;
     Ptr<Frame> mLastFrame(new Frame);
     cv::Mat imColor, imDepth;
+    cv::TickMeter tm;
     for (size_t i = 0; i < nImages; i += 1) {
         imColor = cv::imread(baseDir + vImageFilenamesRGB[i], cv::IMREAD_COLOR);
         imDepth = cv::imread(baseDir + vImageFilenamesD[i], cv::IMREAD_UNCHANGED);
 
+        tm.start();
         Ptr<Frame> mCurrentFrame(new Frame(imColor, imDepth, vTimestamps[i]));
         mCurrentFrame->ExtractFeatures(pExtractor);
 
@@ -101,18 +113,26 @@ int main()
         mCurrentFrame->SetPose(Tcw);
 
         // Draw each 20 frames
-        if (mCurrentFrame->mnId % 20 == 1 && !pOdometry->mpRansac->mvInliers.empty()) {
+        if (mCurrentFrame->GetId() % 10 == 1 && !pOdometry->mpRansac->mvInliers.empty()) {
             KeyFrame* pKF = new KeyFrame(*mCurrentFrame, pMap, pDatabaseKF);
+            pKF->ComputeBoW(pVocabulary);
+
+            pMap->AddKeyFrame(pKF);
+            pDatabaseKF->Add(pKF);
 
             // Create matched landmarks
             for (const auto& m : pOdometry->mpRansac->mvInliers) {
                 int idx = m.trainIdx;
                 cv::Mat x3Dw = mCurrentFrame->UnprojectWorld(idx);
-                Landmark* pNewLandmark = new Landmark(x3Dw, mCurrentFrame.get(), idx);
-                // mCurrentFrame->AddLandmark(pNewLandmark, idx);
+                Landmark* pNewLandmark = new Landmark(x3Dw, pKF, idx);
+                pNewLandmark->AddObservation(pKF, i);
+                pKF->AddLandmark(pNewLandmark, i);
                 pMap->AddLandmark(pNewLandmark);
+
+                mCurrentFrame->AddLandmark(pNewLandmark, i);
             }
-            pMap->AddKeyFrame(pKF);
+
+            vector<KeyFrame*> vpCandidates = pDatabaseKF->Query(pKF, 0.05f);
         }
 
         // Save results
@@ -122,15 +142,17 @@ int main()
         f << setprecision(6) << mCurrentFrame->mTimestamp << setprecision(7) << " " << t.at<float>(0) << " " << t.at<float>(1) << " " << t.at<float>(2)
           << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl;
 
-        cout << GREEN << ((mCurrentFrame->mnId + 1) * 100) / nImages << " %"
-             << RESET << '\r';
-        cout.flush();
+        //        cout << GREEN << ((mCurrentFrame->GetId() + 1) * 100) / nImages << " %"
+        //             << RESET << '\r';
+        //        cout.flush();
 
         mLastFrame = mCurrentFrame;
+        tm.stop();
     }
 
     f.close();
     cout << "Trajectory saved!" << endl;
+    cout << "Mean tracking time: " << tm.getTimeSec() / tm.getCounter() << " s." << endl;
 
     pViewer->RequestFinish();
     while (!pViewer->isFinished())
