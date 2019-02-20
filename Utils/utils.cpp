@@ -1,5 +1,8 @@
 #include "utils.h"
 #include "Core/frame.h"
+#include "Core/keyframe.h"
+#include "Core/landmark.h"
+#include "Core/map.h"
 #include "common.h"
 #include "converter.h"
 #include <fstream>
@@ -41,8 +44,8 @@ bool FindHomography(const Frame* pF1, const Frame* pF2, const vector<cv::DMatch>
     vTargetPoints.reserve(vMatches12.size());
 
     for (const auto& m : vMatches12) {
-        vSourcePoints.push_back(pF1->mvKps[m.queryIdx].pt);
-        vTargetPoints.push_back(pF2->mvKps[m.trainIdx].pt);
+        vSourcePoints.push_back(pF1->mvKeys[m.queryIdx].pt);
+        vTargetPoints.push_back(pF2->mvKeys[m.trainIdx].pt);
     }
 
     try {
@@ -62,8 +65,8 @@ cv::Mat DistanceFiler(const Frame* pF1, const Frame* pF2, vector<cv::DMatch>& vM
         return cv::Mat();
 
     const auto isOutlier([&pF1, &pF2, &thresh, &H](const cv::DMatch& m12) {
-        const cv::Point2f& dst = pF2->mvKps[m12.trainIdx].pt;
-        const cv::Point2f& src = ApplyHomography(pF1->mvKps[m12.queryIdx].pt, H);
+        const cv::Point2f& dst = pF2->mvKeys[m12.trainIdx].pt;
+        const cv::Point2f& src = ApplyHomography(pF1->mvKeys[m12.queryIdx].pt, H);
 
         double d = cv::norm(cv::Vec2f(dst.x, dst.y), cv::Vec2f(src.x, src.y));
         return d > thresh;
@@ -122,8 +125,8 @@ vector<pair<double, double>> TestRecallPrecision(Frame* pF1, Frame* pF2, cv::Ptr
     vector<double> vDistances;
     double maxEuclideanDist = 0;
     for (size_t i = 0; i < vMatches12.size(); i++) {
-        cv::Point2f src = pF1->mvKps[vMatches12[i].queryIdx].pt;
-        cv::Point2f tgt = pF2->mvKps[vMatches12[i].trainIdx].pt;
+        cv::Point2f src = pF1->mvKeys[vMatches12[i].queryIdx].pt;
+        cv::Point2f tgt = pF2->mvKeys[vMatches12[i].trainIdx].pt;
 
         cv::Point2f srcT = ApplyHomography(src, H);
         double dist = cv::norm(cv::Vec2f(srcT.x, srcT.y) - cv::Vec2f(tgt.x, tgt.y));
@@ -176,4 +179,64 @@ void AddNormal(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<pcl::P
     normalEstimator.compute(*normals);
 
     pcl::concatenateFields(*cloud, *normals, *normalsCloud);
+}
+
+void UpdateLastFrame(Frame& lastFrame, Map* pMap)
+{
+    vector<pair<float, size_t>> vDepthIdx;
+    vDepthIdx.reserve(lastFrame.N);
+    for (size_t i = 0; i < lastFrame.N; ++i) {
+        float z = lastFrame.mvKeys3Dc[i].z;
+        if (z > 0)
+            vDepthIdx.push_back({ z, i });
+    }
+
+    if (vDepthIdx.empty())
+        return;
+
+    sort(vDepthIdx.begin(), vDepthIdx.end());
+
+    int nPoints = 0;
+    for (const auto& pair : vDepthIdx) {
+        size_t idx = pair.second;
+        bool bCreateNew = false;
+
+        Landmark* pLM = lastFrame.GetLandmark(idx);
+        if (!pLM)
+            bCreateNew = true;
+        else if (pLM->Observations() < 1)
+            bCreateNew = true;
+
+        if (bCreateNew) {
+            cv::Mat x3Dw = lastFrame.UnprojectWorld(idx);
+            Landmark* pNewLM = new Landmark(x3Dw, pMap, lastFrame, idx);
+            lastFrame.AddLandmark(pNewLM, idx);
+            nPoints++;
+        } else
+            nPoints++;
+
+        if (pair.first > 3.09f && nPoints > 100)
+            break;
+    }
+}
+
+double tNorm(const cv::Mat& T)
+{
+    cv::Mat t = T.rowRange(0, 3).col(3);
+    return cv::norm(t);
+}
+
+double RNorm(const cv::Mat& T)
+{
+    cv::Mat R = T.rowRange(0, 3).colRange(0, 3);
+    return acos(0.5 * (R.at<float>(0, 0) + R.at<float>(1, 1) + R.at<float>(2, 2) - 1.0));
+}
+
+bool NeedNewKF(KeyFrame* pKFref, Frame& currentFrame)
+{
+    static const double mint = 0.25;
+    static const double minR = 0.25;
+
+    cv::Mat delta = currentFrame.GetPose().inv() * pKFref->GetPose();
+    return (tNorm(delta) > mint || RNorm(delta) > minR);
 }

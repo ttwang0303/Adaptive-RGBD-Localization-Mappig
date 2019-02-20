@@ -61,7 +61,7 @@ vector<KeyFrame*> Database::Query(KeyFrame* pKF, float minScore)
             for (KeyFrame* pKFsw : lKFs) {
                 if (pKFsw->mnLoopQuery != pKF->GetId()) {
                     pKFsw->mnLoopWords = 0;
-                    if (abs(static_cast<int>(pKF->GetId() - pKFsw->GetId())) > 5) {
+                    if (abs(static_cast<int>(pKF->GetId() - pKFsw->GetId())) > 10) {
                         pKFsw->mnLoopQuery = pKF->GetId();
                         lKFsSharingWords.push_back(pKFsw);
                     }

@@ -25,6 +25,8 @@ public:
 
     std::mutex mMutexMapUpdate;
 
+    std::mutex mMutexPointCreation;
+
 protected:
     std::set<Landmark*> mspLandmarks;
     std::set<KeyFrame*> mspKeyFrames;

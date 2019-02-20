@@ -1,7 +1,9 @@
 #ifndef KEYFRAME_H
 #define KEYFRAME_H
 
+#include "covisiblegraph.h"
 #include "frame.h"
+#include <mutex>
 
 class Map;
 class Database;
@@ -10,7 +12,11 @@ class KeyFrame : public Frame {
 public:
     KeyFrame(Frame& frame, Map* pMap, Database* pKFDB);
 
-    static bool weightComp(int a, int b) { return a > b; }
+    void SetNotErase();
+    void SetErase();
+
+    // Set/check bad flag
+    void SetBadFlag();
 
     static bool lId(KeyFrame* pKF1, KeyFrame* pKF2) { return pKF1->mnId < pKF2->mnId; }
 
@@ -23,9 +29,17 @@ public:
     int mnLoopWords;
     float mLoopScore;
 
+    // Manage covisibility graph, spanning tree and loop edges
+    CovisibilityGraph mG;
+
 protected:
     // BoW
     Database* mpKeyFrameDB;
+
+    // Bad flags
+    bool mbNotErase;
+    bool mbToBeErased;
+    bool mbBad;
 
     Map* mpMap;
 };

@@ -107,8 +107,8 @@ void GeneralizedICP::CreateCloudsFromMatches(const Frame* pF1, const Frame* pF2,
     }
 
     for (const auto& m : vMatches12) {
-        const cv::Point3f& source = pF1->mvKps3Dc[m.queryIdx];
-        const cv::Point3f& target = pF2->mvKps3Dc[m.trainIdx];
+        const cv::Point3f& source = pF1->mvKeys3Dc[m.queryIdx];
+        const cv::Point3f& target = pF2->mvKeys3Dc[m.trainIdx];
 
         if (isnan(source.z) || isnan(target.z))
             continue;

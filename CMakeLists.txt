@@ -75,6 +75,16 @@ include_directories( ${DBoW3_INCLUDE_DIRS} )
 #------------------------------------------
 #include_directories(/home/antonio/Public/Libraries/gnuplot-iostream/)
 
+#------------------------------------------
+#                    LEDA
+#------------------------------------------
+find_package(LEDA REQUIRED)
+include_directories( ${LEDA_INCLUDE_DIRS} )
+link_libraries(${LEDA_LIB_DIR})
+list(APPEND LEDA_LIBS
+    ${LEDA_LIB_DIR}/libleda.so)
+
+
 include_directories(${PROJECT_SOURCE_DIR})
 
 add_library(${PROJECT_NAME}
@@ -87,6 +97,7 @@ Odometry/adaptivergbdlocalization.cpp
 Odometry/ransacpcl.cpp
 Odometry/kabsch.cpp
 Odometry/odometry.cpp
+Odometry/pnpsolver.cpp
 
 Core/frame.cpp
 Core/dbscan.cpp
@@ -94,6 +105,7 @@ Core/landmark.cpp
 Core/map.cpp
 Core/keyframe.cpp
 Core/keyframedatabase.cpp
+Core/covisiblegraph.cpp
 
 Drawer/viewer.cpp
 Drawer/pointclouddrawer.cpp
@@ -104,6 +116,8 @@ Features/detectoradjuster.cpp
 Features/statefulfeaturedetector.cpp
 Features/videodynamicadaptedfeaturedetector.cpp
 Features/videogridadaptedfeaturedetector.cpp
+
+LoopClosing/loopclosing.cpp
 )
 
 #add_library(icp SHARED
@@ -128,7 +142,8 @@ target_link_libraries(${PROJECT_NAME}
     ${CSPARSE_LIBRARY}
     ${Pangolin_LIBRARIES}
     ${DLib_LIBS}
-    ${DBoW3_LIBS})
+    ${DBoW3_LIBS}
+    ${LEDA_LIBS})
 
 add_executable(main main.cpp)
 target_link_libraries(main ${PROJECT_NAME})

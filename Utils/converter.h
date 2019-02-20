@@ -2,14 +2,20 @@
 #define CONVERTER_H
 
 #include <Eigen/Dense>
+#include <g2o/types/sim3/types_seven_dof_expmap.h>
 #include <opencv2/core.hpp>
 
 class Converter {
 public:
     static std::vector<cv::Mat> toDescriptorVector(const cv::Mat& Descriptors);
 
+    static g2o::SE3Quat toSE3Quat(const cv::Mat& cvT);
+    static g2o::SE3Quat toSE3Quat(const g2o::Sim3& gSim3);
+
     static cv::Mat toHomogeneous(const cv::Mat& r, const cv::Mat& t);
 
+    static cv::Mat toCvMat(const g2o::SE3Quat& SE3);
+    static cv::Mat toCvMat(const g2o::Sim3& Sim3);
     static cv::Mat toCvMat(const Eigen::Matrix<double, 4, 4>& m);
     static cv::Mat toCvMat(const Eigen::Matrix<float, 4, 4>& m);
     static cv::Mat toCvMat(const Eigen::Matrix3d& m);

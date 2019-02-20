@@ -51,6 +51,29 @@ void PointCloudDrawer::DrawPointCloud(bool drawLandmarks, bool drawDenseCloud, b
         // Draw graph
         if (drawKFs)
             DrawConnections(vpKFs);
+
+        // Draw lines to landmarks
+        if (drawKFs) {
+            KeyFrame* lastKF = vpKFs.back();
+            cv::Mat P = lastKF->GetCameraCenter();
+
+            glLineWidth(mLineWidth);
+            glColor3f(0.82f, 0.82f, 0.82f);
+            glBegin(GL_LINES);
+            for (size_t i = 0; i < lastKF->N; i++) {
+                Landmark* pLM = lastKF->GetLandmark(i);
+                if (!pLM)
+                    continue;
+                if (lastKF->IsOutlier(i))
+                    continue;
+
+                cv::Mat Xw = pLM->GetWorldPos();
+
+                glVertex3f(P.at<float>(0), P.at<float>(1), P.at<float>(2));
+                glVertex3f(Xw.at<float>(0), Xw.at<float>(1), Xw.at<float>(2));
+            }
+            glEnd();
+        }
     }
 }
 
@@ -65,7 +88,11 @@ void PointCloudDrawer::DrawLandmarks()
     glColor3f(1.0f, 0.0f, 0.0f);
 
     for (size_t i = 0; i < vpLandmarks.size(); i++) {
-        cv::Mat pos = vpLandmarks[i]->GetWorldPos();
+        Landmark* pLM = vpLandmarks[i];
+        if (!pLM)
+            continue;
+
+        cv::Mat pos = pLM->GetWorldPos();
         glVertex3f(pos.at<float>(0), pos.at<float>(1), pos.at<float>(2));
     }
 
@@ -126,8 +153,8 @@ void PointCloudDrawer::DrawPoseKF(KeyFrame* pKF)
     cv::Mat Twc = pKF->GetPose().inv().t();
     glPushMatrix();
     glMultMatrixf(Twc.ptr<GLfloat>(0));
-    glLineWidth(mLineWidthGraph);
-    glColor3f(r, g, b);
+    glLineWidth(mLineWidth);
+    glColor3f(0, 0, 0);
     glBegin(GL_LINES);
     glVertex3f(0, 0, 0);
     glVertex3f(w, h, z);

@@ -6,22 +6,26 @@
 class Frame;
 class Ransac;
 class GeneralizedICP;
+class PnPSolver;
 
 class Odometry {
 public:
     enum eAlgorithm {
         RANSAC = 0,
         ICP,
-        ADAPTIVE
+        MOTION_ONLY_BA,
+        ADAPTIVE,
+        ADAPTIVE_2
     };
 
     Odometry(const eAlgorithm& algorithm);
     ~Odometry();
 
-    cv::Mat Compute(Frame& pF1, Frame& pF2, const std::vector<cv::DMatch>& vMatches12);
+    void Compute(Frame& pF1, Frame& pF2, const std::vector<cv::DMatch>& vMatches12);
 
     Ransac* mpRansac;
     GeneralizedICP* mpGicp;
+    PnPSolver* mpBA;
 
 private:
     eAlgorithm mOdometryAlgorithm;

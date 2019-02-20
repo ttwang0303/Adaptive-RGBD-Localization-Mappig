@@ -8,7 +8,6 @@
 #include "Features/extractor.h"
 #include "Features/matcher.h"
 #include "Odometry/odometry.h"
-#include "Odometry/pnpsolver.h"
 #include "Odometry/ransac.h"
 #include "Utils/common.h"
 #include "Utils/converter.h"
@@ -87,94 +86,75 @@ int main()
 
     ofstream f("CameraTrajectory.txt");
     f << fixed;
-    Frame mLastFrame;
+    Ptr<Frame> mLastFrame(new Frame);
     cv::Mat imColor, imDepth;
     cv::TickMeter tm;
-    KeyFrame* pKFref;
-
-    for (size_t n = 0; n < nImages; n += 1) {
-        imColor = cv::imread(baseDir + vImageFilenamesRGB[n], cv::IMREAD_COLOR);
-        imDepth = cv::imread(baseDir + vImageFilenamesD[n], cv::IMREAD_UNCHANGED);
+    for (size_t i = 0; i < nImages; i += 1) {
+        imColor = cv::imread(baseDir + vImageFilenamesRGB[i], cv::IMREAD_COLOR);
+        imDepth = cv::imread(baseDir + vImageFilenamesD[i], cv::IMREAD_UNCHANGED);
 
         tm.start();
-        Frame mCurrentFrame(imColor, imDepth, vTimestamps[n]);
-        mCurrentFrame.ExtractFeatures(pExtractor);
+        Ptr<Frame> mCurrentFrame(new Frame(imColor, imDepth, vTimestamps[i]));
+        mCurrentFrame->ExtractFeatures(pExtractor);
+        mCurrentFrame->ComputeBoW(pVocabulary);
 
-        // Initialization
-        if (n == 0) {
-            mCurrentFrame.SetPose(cv::Mat::eye(4, 4, CV_32F));
-
-            KeyFrame* pKFini = new KeyFrame(mCurrentFrame, pMap, pDatabaseKF);
-            pMap->AddKeyFrame(pKFini);
-            pKFref = pKFini;
-
-            // Create Lamdmarks
-            for (size_t i = 0; i < mCurrentFrame.N; ++i) {
-                if (mCurrentFrame.mvKeys3Dc[i].z > 0) {
-                    cv::Mat x3Dw = mCurrentFrame.UnprojectWorld(i);
-                    Landmark* pNewLM = new Landmark(x3Dw, pMap, pKFini, i);
-                    pNewLM->AddObservation(pKFini, i);
-                    pKFini->AddLandmark(pNewLM, i);
-                    pMap->AddLandmark(pNewLM);
-
-                    mCurrentFrame.AddLandmark(pNewLM, i);
-                }
-            }
-            cout << "Map created with " << pMap->LandmarksInMap() << " points" << endl;
-        }
-        // Track
-        else {
-            if (n > 1)
-                UpdateLastFrame(mLastFrame, pMap);
-
-            // Feature matching
+        cv::Mat Tcw;
+        if (i == 0) {
+            Tcw = cv::Mat::eye(4, 4, CV_32F);
+        } else {
             vector<cv::DMatch> vMatches;
-            size_t nmatches = pMatcher->KnnMatch(mLastFrame, mCurrentFrame, vMatches);
-            pOdometry->Compute(mLastFrame, mCurrentFrame, vMatches);
+            pMatcher->KnnMatch(*mLastFrame, *mCurrentFrame, vMatches);
+            Tcw = pOdometry->Compute(*mLastFrame, *mCurrentFrame, vMatches);
 
-            Matcher::DrawInlierPoints(mCurrentFrame);
-
-            // Discard outliers
-            for (size_t i = 0; i < mCurrentFrame.N; ++i) {
-                Landmark* pLM = mCurrentFrame.GetLandmark(i);
-                if (!pLM)
-                    continue;
-                if (mCurrentFrame.IsInlier(i))
-                    continue;
-
-                mCurrentFrame.AddLandmark(static_cast<Landmark*>(nullptr), i);
-                // mCurrentFrame.SetInlier(i);
-                pLM->mbTrackInView = false;
-                pLM->mnLastFrameSeen = mCurrentFrame.GetId();
-            }
+            // Composition rule
+            Tcw = Tcw * mLastFrame->GetPose();
+            Matcher::DrawMatches(*mLastFrame, *mCurrentFrame, pOdometry->mpRansac->mvInliers);
         }
 
-        // Check if its necessary to insert a new KF
-        if (NeedNewKF(pKFref, mCurrentFrame)) {
-            KeyFrame* pKF = new KeyFrame(mCurrentFrame, pMap, pDatabaseKF);
+        // Update pose
+        mCurrentFrame->SetPose(Tcw);
+
+        // Draw each 20 frames
+        if (mCurrentFrame->GetId() % 10 == 1 && !pOdometry->mpRansac->mvInliers.empty()) {
+            KeyFrame* pKF = new KeyFrame(*mCurrentFrame, pMap, pDatabaseKF);
             pKF->ComputeBoW(pVocabulary);
-            pKFref = pKF;
+
             pMap->AddKeyFrame(pKF);
-
-            set<Landmark*> spLMs = pKF->GetLandmarks();
-            for (Landmark* pLM : spLMs)
-                pMap->AddLandmark(pLM);
-
             pDatabaseKF->Add(pKF);
-            cout << pMap->KeyFramesInMap() << " KFs in map" << endl;
-            // vector<KeyFrame*> vpCandidates = pDatabaseKF->Query(pKF, 0.05f);
+
+            // Create matched landmarks
+            for (const auto& m : pOdometry->mpRansac->mvInliers) {
+                int idx = m.trainIdx;
+                cv::Mat x3Dw = mCurrentFrame->UnprojectWorld(idx);
+                Landmark* pNewLandmark = new Landmark(x3Dw, pKF, idx);
+                pNewLandmark->AddObservation(pKF, i);
+                pKF->AddLandmark(pNewLandmark, i);
+                pMap->AddLandmark(pNewLandmark);
+
+                mCurrentFrame->AddLandmark(pNewLandmark, i);
+            }
+
+            vector<KeyFrame*> vpCandidates = pDatabaseKF->Query(pKF, 0.05f);
+
+            //            for (KeyFrame* pKFc : vpCandidates) {
+            //                cout << pKF->GetId() << " - " << pKFc->GetId() << endl;
+            //                vector<cv::DMatch> vMatches;
+            //                pMatcher->BoWMatch(pKF, pKFc, vMatches);
+
+            //                Matcher::DrawMatches(*pKF, *pKFc, vMatches, 0, "Matches DB");
+            //            }
         }
 
         // Save results
-        const cv::Mat& R = mCurrentFrame.GetRotationInv();
+        const cv::Mat& R = mCurrentFrame->GetRotationInv();
         vector<float> q = Converter::toQuaternion(R);
-        const cv::Mat& t = mCurrentFrame.GetCameraCenter();
-        f << setprecision(6) << mCurrentFrame.mTimestamp << setprecision(7) << " " << t.at<float>(0) << " " << t.at<float>(1) << " " << t.at<float>(2)
+        const cv::Mat& t = mCurrentFrame->GetCameraCenter();
+        f << setprecision(6) << mCurrentFrame->mTimestamp << setprecision(7) << " " << t.at<float>(0) << " " << t.at<float>(1) << " " << t.at<float>(2)
           << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl;
 
-        cout << GREEN << ((mCurrentFrame.GetId() + 1) * 100) / nImages << " %"
-             << RESET << '\r';
-        cout.flush();
+        //        cout << GREEN << ((mCurrentFrame->GetId() + 1) * 100) / nImages << " %"
+        //             << RESET << '\r';
+        //        cout.flush();
 
         mLastFrame = mCurrentFrame;
         tm.stop();
@@ -205,3 +185,4 @@ int main()
 
     return 0;
 }
+

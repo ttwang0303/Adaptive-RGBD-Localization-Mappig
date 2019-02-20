@@ -23,7 +23,7 @@ public:
     Frame(cv::Mat& imColor);
 
     // Pose functions
-    void SetPose(cv::Mat& Tcw);
+    void SetPose(cv::Mat Tcw);
     cv::Mat GetPose();
     cv::Mat GetRotationInv();
     cv::Mat GetCameraCenter();
@@ -53,19 +53,31 @@ public:
 
     long unsigned int GetId();
 
+    // Outlier/Inlier feature association
+    void SetOutlier(const size_t& idx);
+    void SetInlier(const size_t& idx);
+    bool IsOutlier(const size_t& idx);
+    bool IsInlier(const size_t& idx);
+
     // Copy operator
     const Frame& operator=(Frame& frame);
 
 public:
     cv::Mat mImColor;
+    cv::Mat mImGray;
     cv::Mat mImDepth;
 
     double mTimestamp;
 
     DenseCloud::Ptr mpCloud = nullptr;
-    std::vector<cv::KeyPoint> mvKps;
-    cv::Mat mDescriptors;
-    std::vector<cv::Point3f> mvKps3Dc;
+
+    std::vector<cv::KeyPoint> mvKeys;
+    std::vector<cv::KeyPoint> mvKeysUn;
+    std::vector<cv::Point3f> mvKeys3Dc;
+
+        cv::Mat mDescriptors;
+
+    std::vector<bool> mvbOutlier;
 
     // Bag of Words structures
     DBoW3::BowVector mBowVec;

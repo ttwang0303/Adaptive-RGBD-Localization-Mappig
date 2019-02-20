@@ -1,5 +1,7 @@
 #include "keyframe.h"
+#include "covisiblegraph.h"
 #include "keyframedatabase.h"
+#include "landmark.h"
 #include "map.h"
 
 using namespace std;
@@ -10,13 +12,20 @@ KeyFrame::KeyFrame(Frame& frame, Map* pMap, Database* pKFDB)
     : mnFrameId(frame.GetId())
     , mnLoopQuery(0)
     , mnLoopWords(0)
+    , mpKeyFrameDB(pKFDB)
+    , mbNotErase(false)
+    , mbToBeErased(false)
+    , mbBad(false)
+    , mpMap(pMap)
 {
     mImColor = frame.mImColor;
+    mImGray = frame.mImGray;
     mImDepth = frame.mImDepth;
     mTimestamp = frame.mTimestamp;
-    mvKps = frame.mvKps;
+    mvKeys = frame.mvKeys;
     mDescriptors = frame.mDescriptors;
-    mvKps3Dc = frame.mvKps3Dc;
+    mvKeys3Dc = frame.mvKeys3Dc;
+    mvbOutlier = frame.mvbOutlier;
     mBowVec = frame.mBowVec;
     mFeatVec = frame.mFeatVec;
     N = frame.N;
@@ -29,7 +38,28 @@ KeyFrame::KeyFrame(Frame& frame, Map* pMap, Database* pKFDB)
         SetPose(framePose);
 
     mvpLandmarks = frame.GetLandmarksMatched();
+    mG.SetRootNode(this);
 
     unique_lock<mutex> lock(mMutexId);
     mnId = nNextKFid++;
+}
+
+void KeyFrame::SetNotErase()
+{
+    mbNotErase = true;
+}
+
+void KeyFrame::SetErase()
+{
+    if (mG.isLoopEmpty())
+        mbNotErase = false;
+
+    if (mbToBeErased) {
+        SetBadFlag();
+    }
+}
+
+void KeyFrame::SetBadFlag()
+{
+
 }

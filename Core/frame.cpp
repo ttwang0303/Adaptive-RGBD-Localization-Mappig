@@ -22,6 +22,7 @@ Frame::Frame(cv::Mat& imColor, cv::Mat& imDepth, double timestamp)
     unique_lock<mutex> lock(mMutexId);
     mnId = nNextId++;
 
+    cv::cvtColor(mImColor, mImGray, cv::COLOR_BGR2GRAY);
     imDepth.convertTo(mImDepth, CV_32F, depthFactor);
 }
 
@@ -31,12 +32,14 @@ Frame::Frame(cv::Mat& imColor)
     , mTimestamp(0)
     , mpCloud(nullptr)
 {
+    cv::cvtColor(mImColor, mImGray, cv::COLOR_BGR2GRAY);
+
     // Frame ID
     unique_lock<mutex> lock(mMutexId);
     mnId = nNextId++;
 }
 
-void Frame::SetPose(cv::Mat& Tcw)
+void Frame::SetPose(cv::Mat Tcw)
 {
     unique_lock<mutex> lock1(mMutexPose);
     mTcw = Tcw.clone();
@@ -80,39 +83,40 @@ cv::Mat Frame::GetTranslation()
 
 void Frame::ExtractFeatures(Extractor* pExtractor)
 {
-    pExtractor->Extract(mImColor, cv::Mat(), mvKps, mDescriptors);
+    pExtractor->Extract(mImColor, cv::Mat(), mvKeys, mDescriptors);
 
-    N = mvKps.size();
-    mvKps3Dc = vector<cv::Point3f>(N, cv::Point3f(0, 0, 0));
-
+    N = mvKeys.size();
     {
         unique_lock<mutex> lock(mMutexFeatures);
         mvpLandmarks = vector<Landmark*>(N, static_cast<Landmark*>(nullptr));
     }
 
+    mvKeys3Dc = vector<cv::Point3f>(N, cv::Point3f(0, 0, 0));
+    mvbOutlier = vector<bool>(N, false);
+
     for (size_t i = 0; i < N; ++i) {
-        const float v = mvKps[i].pt.y;
-        const float u = mvKps[i].pt.x;
+        const float v = mvKeys[i].pt.y;
+        const float u = mvKeys[i].pt.x;
 
         const float z = mImDepth.at<float>(v, u);
         if (z > 0) {
             // KeyPoint in Camera coordinates
             const float x = (u - cx) * z * invfx;
             const float y = (v - cy) * z * invfy;
-            mvKps3Dc[i] = cv::Point3f(x, y, z);
+            mvKeys3Dc[i] = cv::Point3f(x, y, z);
         }
     }
 }
 
 void Frame::Detect(cv::Ptr<cv::FeatureDetector> pDetector)
 {
-    pDetector->detect(mImColor, mvKps);
-    N = mvKps.size();
+    pDetector->detect(mImColor, mvKeys);
+    N = mvKeys.size();
 }
 
 void Frame::Compute(cv::Ptr<cv::DescriptorExtractor> pDescriptor)
 {
-    pDescriptor->compute(mImColor, mvKps, mDescriptors);
+    pDescriptor->compute(mImColor, mvKeys, mDescriptors);
 }
 
 void Frame::ComputeBoW(DBoW3::Vocabulary* pVoc)
@@ -205,7 +209,7 @@ Landmark* Frame::GetLandmark(const size_t& idx)
 
 cv::Mat Frame::UnprojectWorld(const size_t& i)
 {
-    const cv::Point3f& p3Dc = mvKps3Dc[i];
+    const cv::Point3f& p3Dc = mvKeys3Dc[i];
     if (p3Dc.z > 0) {
         cv::Mat x3Dc = (cv::Mat_<float>(3, 1) << p3Dc.x, p3Dc.y, p3Dc.z);
 
@@ -221,15 +225,37 @@ unsigned long Frame::GetId()
     return mnId;
 }
 
+void Frame::SetOutlier(const size_t& idx)
+{
+    mvbOutlier[idx] = true;
+}
+
+void Frame::SetInlier(const size_t& idx)
+{
+    mvbOutlier[idx] = false;
+}
+
+bool Frame::IsOutlier(const size_t& idx)
+{
+    return mvbOutlier[idx] == true;
+}
+
+bool Frame::IsInlier(const size_t& idx)
+{
+    return mvbOutlier[idx] == false;
+}
+
 const Frame& Frame::operator=(Frame& frame)
 {
     if (&frame != this) {
         mImColor = frame.mImColor;
+        mImGray = frame.mImGray;
         mImDepth = frame.mImDepth;
         mTimestamp = frame.mTimestamp;
-        mvKps = frame.mvKps;
+        mvKeys = frame.mvKeys;
         mDescriptors = frame.mDescriptors;
-        mvKps3Dc = frame.mvKps3Dc;
+        mvKeys3Dc = frame.mvKeys3Dc;
+        mvbOutlier = frame.mvbOutlier;
         mBowVec = frame.mBowVec;
         mFeatVec = frame.mFeatVec;
         N = frame.N;

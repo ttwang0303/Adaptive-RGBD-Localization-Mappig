@@ -9,6 +9,8 @@
 #include <vector>
 
 class Frame;
+class KeyFrame;
+class Map;
 
 void LoadImages(const std::string& associationFilename, std::vector<std::string>& vImageFilenamesRGB,
     std::vector<std::string>& vImageFilenamesD, std::vector<double>& vTimestamps);
@@ -30,5 +32,11 @@ void VoxelGridFilterCloud(pcl::PointCloud<PointT>& cloud, float resolution)
     voxel.setInputCloud(boost::make_shared<pcl::PointCloud<PointT>>(cloud));
     voxel.filter(cloud);
 }
+
+// Tracking functions
+void UpdateLastFrame(Frame& lastFrame, Map* pMap);
+double tNorm(const cv::Mat& T);
+double RNorm(const cv::Mat& T);
+bool NeedNewKF(KeyFrame* pKFref, Frame& currentFrame);
 
 #endif // UTILS_H
