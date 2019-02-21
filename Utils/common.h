@@ -29,6 +29,8 @@ const std::string BOLDMAGENTA = "\033[1m\033[35m";
 const std::string BOLDCYAN = "\033[1m\033[36m";
 const std::string BOLDWHITE = "\033[1m\033[37m";
 
+namespace Calibration {
+
 // -------- FR1 --------
 const double fx = 517.3;
 const double fy = 516.5;
@@ -59,6 +61,7 @@ const double cy = 255.3;
 const double depthFactor = 1.0 / 5000.0;
 const double invfx = 1.0 / fx;
 const double invfy = 1.0 / fy;
+}
 
 const int nFeatures = 1000;
 

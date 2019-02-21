@@ -15,14 +15,21 @@ public:
     void SetNotErase();
     void SetErase();
 
+    std::vector<size_t> GetFeaturesInArea(const float& x, const float& y, const float& r) const;
+
+    bool IsInImage(const float& x, const float& y) const;
+
     // Set/check bad flag
     void SetBadFlag();
+    bool isBad();
 
     static bool lId(KeyFrame* pKF1, KeyFrame* pKF2) { return pKF1->mnId < pKF2->mnId; }
 
 public:
     static long unsigned int nNextKFid;
     const long unsigned int mnFrameId;
+
+    long unsigned int mnFuseTargetForKF;
 
     // Used by Database
     long unsigned int mnLoopQuery;
@@ -31,6 +38,9 @@ public:
 
     // Manage covisibility graph, spanning tree and loop edges
     CovisibilityGraph mG;
+
+    // Pose relative to parent (this is computed when bad flag is activated)
+    cv::Mat mTcp;
 
 protected:
     // BoW

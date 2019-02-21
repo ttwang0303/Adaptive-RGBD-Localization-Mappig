@@ -25,6 +25,7 @@ public:
     // Pose functions
     void SetPose(cv::Mat Tcw);
     cv::Mat GetPose();
+    cv::Mat GetPoseInv();
     cv::Mat GetRotationInv();
     cv::Mat GetCameraCenter();
     cv::Mat GetRotation();
@@ -44,9 +45,11 @@ public:
 
     // Landmark observation functions
     void AddLandmark(Landmark* pLandmark, const size_t& idx);
-    std::set<Landmark*> GetLandmarks();
-    std::vector<Landmark*> GetLandmarksMatched();
+    std::set<Landmark*> GetLandmarkSet();
+    std::vector<Landmark*> GetLandmarks();
     Landmark* GetLandmark(const size_t& idx);
+    void EraseLandmark(const size_t& idx);
+    void ReplaceLandmark(const size_t& idx, Landmark* pLM);
 
     // Backprojects a keypoint (if depth info available) into 3D world coordinates
     cv::Mat UnprojectWorld(const size_t& i);
@@ -72,10 +75,9 @@ public:
     DenseCloud::Ptr mpCloud = nullptr;
 
     std::vector<cv::KeyPoint> mvKeys;
-    std::vector<cv::KeyPoint> mvKeysUn;
     std::vector<cv::Point3f> mvKeys3Dc;
 
-        cv::Mat mDescriptors;
+    cv::Mat mDescriptors;
 
     std::vector<bool> mvbOutlier;
 
@@ -94,6 +96,7 @@ protected:
 
     // Camera pose.
     cv::Mat mTcw;
+    cv::Mat Twc;
 
     // Rotation, translation and camera center
     cv::Mat mRcw;

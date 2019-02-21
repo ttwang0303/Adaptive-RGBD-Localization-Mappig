@@ -78,11 +78,11 @@ include_directories( ${DBoW3_INCLUDE_DIRS} )
 #------------------------------------------
 #                    LEDA
 #------------------------------------------
-find_package(LEDA REQUIRED)
-include_directories( ${LEDA_INCLUDE_DIRS} )
-link_libraries(${LEDA_LIB_DIR})
-list(APPEND LEDA_LIBS
-    ${LEDA_LIB_DIR}/libleda.so)
+#find_package(LEDA REQUIRED)
+#include_directories( ${LEDA_INCLUDE_DIRS} )
+#link_libraries(${LEDA_LIB_DIR})
+#list(APPEND LEDA_LIBS
+#    ${LEDA_LIB_DIR}/libleda.so)
 
 
 include_directories(${PROJECT_SOURCE_DIR})
@@ -98,6 +98,7 @@ Odometry/ransacpcl.cpp
 Odometry/kabsch.cpp
 Odometry/odometry.cpp
 Odometry/pnpsolver.cpp
+Odometry/localbundleadjustment.cpp
 
 Core/frame.cpp
 Core/dbscan.cpp
@@ -106,6 +107,7 @@ Core/map.cpp
 Core/keyframe.cpp
 Core/keyframedatabase.cpp
 Core/covisiblegraph.cpp
+Core/localmapping.cpp
 
 Drawer/viewer.cpp
 Drawer/pointclouddrawer.cpp
@@ -116,8 +118,6 @@ Features/detectoradjuster.cpp
 Features/statefulfeaturedetector.cpp
 Features/videodynamicadaptedfeaturedetector.cpp
 Features/videogridadaptedfeaturedetector.cpp
-
-LoopClosing/loopclosing.cpp
 )
 
 #add_library(icp SHARED
@@ -143,7 +143,8 @@ target_link_libraries(${PROJECT_NAME}
     ${Pangolin_LIBRARIES}
     ${DLib_LIBS}
     ${DBoW3_LIBS}
-    ${LEDA_LIBS})
+#   ${LEDA_LIBS}
+)
 
 add_executable(main main.cpp)
 target_link_libraries(main ${PROJECT_NAME})

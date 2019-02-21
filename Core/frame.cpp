@@ -23,7 +23,7 @@ Frame::Frame(cv::Mat& imColor, cv::Mat& imDepth, double timestamp)
     mnId = nNextId++;
 
     cv::cvtColor(mImColor, mImGray, cv::COLOR_BGR2GRAY);
-    imDepth.convertTo(mImDepth, CV_32F, depthFactor);
+    imDepth.convertTo(mImDepth, CV_32F, Calibration::depthFactor);
 }
 
 Frame::Frame(cv::Mat& imColor)
@@ -41,7 +41,7 @@ Frame::Frame(cv::Mat& imColor)
 
 void Frame::SetPose(cv::Mat Tcw)
 {
-    unique_lock<mutex> lock1(mMutexPose);
+    unique_lock<mutex> lock(mMutexPose);
     mTcw = Tcw.clone();
 
     // Update pose matrices
@@ -49,35 +49,46 @@ void Frame::SetPose(cv::Mat Tcw)
     mRwc = mRcw.t();
     mtcw = mTcw.rowRange(0, 3).col(3);
     mOw = -mRcw.t() * mtcw;
+
+    // Transform from camera into world frame
+    Twc = cv::Mat::eye(4, 4, mTcw.type());
+    mRwc.copyTo(Twc.rowRange(0, 3).colRange(0, 3));
+    mOw.copyTo(Twc.rowRange(0, 3).col(3));
 }
 
 cv::Mat Frame::GetPose()
 {
-    unique_lock<mutex> lock1(mMutexPose);
+    unique_lock<mutex> lock(mMutexPose);
     return mTcw.clone();
+}
+
+cv::Mat Frame::GetPoseInv()
+{
+    unique_lock<mutex> lock(mMutexPose);
+    return Twc.clone();
 }
 
 cv::Mat Frame::GetRotationInv()
 {
-    unique_lock<mutex> lock1(mMutexPose);
+    unique_lock<mutex> lock(mMutexPose);
     return mRwc.clone();
 }
 
 cv::Mat Frame::GetCameraCenter()
 {
-    unique_lock<mutex> lock1(mMutexPose);
+    unique_lock<mutex> lock(mMutexPose);
     return mOw.clone();
 }
 
 cv::Mat Frame::GetRotation()
 {
-    unique_lock<mutex> lock1(mMutexPose);
+    unique_lock<mutex> lock(mMutexPose);
     return mRcw.clone();
 }
 
 cv::Mat Frame::GetTranslation()
 {
-    unique_lock<mutex> lock1(mMutexPose);
+    unique_lock<mutex> lock(mMutexPose);
     return mtcw.clone();
 }
 
@@ -101,8 +112,8 @@ void Frame::ExtractFeatures(Extractor* pExtractor)
         const float z = mImDepth.at<float>(v, u);
         if (z > 0) {
             // KeyPoint in Camera coordinates
-            const float x = (u - cx) * z * invfx;
-            const float y = (v - cy) * z * invfy;
+            const float x = (u - Calibration::cx) * z * Calibration::invfx;
+            const float y = (v - Calibration::cy) * z * Calibration::invfy;
             mvKeys3Dc[i] = cv::Point3f(x, y, z);
         }
     }
@@ -140,8 +151,8 @@ void Frame::CreateCloud()
             if (z > 0) {
                 DenseCloud::PointType p;
                 p.z = z;
-                p.x = (j - cx) * z * invfx;
-                p.y = (i - cy) * z * invfy;
+                p.x = (j - Calibration::cx) * z * Calibration::invfx;
+                p.y = (i - Calibration::cy) * z * Calibration::invfy;
 
                 p.b = mImColor.ptr<uchar>(i)[j * 3];
                 p.g = mImColor.ptr<uchar>(i)[j * 3 + 1];
@@ -182,7 +193,7 @@ void Frame::AddLandmark(Landmark* pLandmark, const size_t& idx)
     mvpLandmarks[idx] = pLandmark;
 }
 
-set<Landmark*> Frame::GetLandmarks()
+set<Landmark*> Frame::GetLandmarkSet()
 {
     unique_lock<mutex> lock(mMutexFeatures);
     set<Landmark*> s;
@@ -195,7 +206,7 @@ set<Landmark*> Frame::GetLandmarks()
     return s;
 }
 
-vector<Landmark*> Frame::GetLandmarksMatched()
+vector<Landmark*> Frame::GetLandmarks()
 {
     unique_lock<mutex> lock(mMutexFeatures);
     return mvpLandmarks;
@@ -205,6 +216,18 @@ Landmark* Frame::GetLandmark(const size_t& idx)
 {
     unique_lock<mutex> lock(mMutexFeatures);
     return mvpLandmarks[idx];
+}
+
+void Frame::EraseLandmark(const size_t& idx)
+{
+    unique_lock<mutex> lock(mMutexFeatures);
+    mvpLandmarks[idx] = static_cast<Landmark*>(nullptr);
+}
+
+void Frame::ReplaceLandmark(const size_t& idx, Landmark* pLM)
+{
+    unique_lock<mutex> lock(mMutexFeatures);
+    mvpLandmarks[idx] = pLM;
 }
 
 cv::Mat Frame::UnprojectWorld(const size_t& i)
@@ -268,7 +291,7 @@ const Frame& Frame::operator=(Frame& frame)
         if (!framePose.empty())
             SetPose(framePose);
 
-        mvpLandmarks = frame.GetLandmarksMatched();
+        mvpLandmarks = frame.GetLandmarks();
     }
 
     return *this;

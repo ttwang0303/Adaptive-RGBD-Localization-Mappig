@@ -33,7 +33,7 @@ int main()
     // Good detector/descriptor combinations
     map<string, vector<string>> mCombinationsMap;
     mCombinationsMap["BRISK"] = { "BRISK", "ORB", "FREAK" };
-    mCombinationsMap["FAST"] = { "SIFT" };
+    mCombinationsMap["FAST"] = { "SIFT", "BRIEF" };
     mCombinationsMap["ORB"] = { "BRISK", "ORB", "FREAK" };
     mCombinationsMap["SHI_TOMASI"] = { "BRISK", "ORB", "BRIEF", "FREAK", "SIFT", "LATCH" };
     mCombinationsMap["STAR"] = { "BRISK", "FREAK", "LATCH" };
@@ -112,9 +112,10 @@ int main()
             for (size_t i = 0; i < mCurrentFrame.N; ++i) {
                 if (mCurrentFrame.mvKeys3Dc[i].z > 0) {
                     cv::Mat x3Dw = mCurrentFrame.UnprojectWorld(i);
-                    Landmark* pNewLM = new Landmark(x3Dw, pMap, pKFini, i);
+                    Landmark* pNewLM = new Landmark(x3Dw, pKFini, pMap);
                     pNewLM->AddObservation(pKFini, i);
                     pKFini->AddLandmark(pNewLM, i);
+                    pNewLM->ComputeDistinctiveDescriptors();
                     pMap->AddLandmark(pNewLM);
 
                     mCurrentFrame.AddLandmark(pNewLM, i);
@@ -152,17 +153,10 @@ int main()
         // Check if its necessary to insert a new KF
         if (NeedNewKF(pKFref, mCurrentFrame)) {
             KeyFrame* pKF = new KeyFrame(mCurrentFrame, pMap, pDatabaseKF);
-            pKF->ComputeBoW(pVocabulary);
             pKFref = pKF;
-            pMap->AddKeyFrame(pKF);
-
-            set<Landmark*> spLMs = pKF->GetLandmarks();
-            for (Landmark* pLM : spLMs)
-                pMap->AddLandmark(pLM);
 
             pDatabaseKF->Add(pKF);
             cout << pMap->KeyFramesInMap() << " KFs in map" << endl;
-            // vector<KeyFrame*> vpCandidates = pDatabaseKF->Query(pKF, 0.05f);
         }
 
         // Save results

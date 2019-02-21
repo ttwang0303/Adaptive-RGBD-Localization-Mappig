@@ -8,8 +8,7 @@ public:
     enum eAlgorithm {
         ORB = 0,
         FAST,
-        HARRIS,
-        SHI_TOMASI,
+        GFTT,
         STAR,
         BRISK,
         FREAK,

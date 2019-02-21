@@ -2,6 +2,7 @@
 #include "Core/frame.h"
 #include "Core/keyframe.h"
 #include "Core/landmark.h"
+#include "Utils/common.h"
 #include "extractor.h"
 
 using namespace std;
@@ -121,6 +122,84 @@ int Matcher::BoWMatch(KeyFrame* pKF1, KeyFrame* pKF2, vector<cv::DMatch>& vMatch
     }
 
     return static_cast<int>(vMatches12.size());
+}
+
+int Matcher::Fuse(KeyFrame* pKF, const vector<Landmark*>& vpLandmarks, const float th)
+{
+    cv::Mat Rcw = pKF->GetRotation();
+    cv::Mat tcw = pKF->GetTranslation();
+    cv::Mat Ow = pKF->GetCameraCenter();
+
+    int nFused = 0;
+    const size_t nLMs = vpLandmarks.size();
+
+    for (size_t i = 0; i < nLMs; ++i) {
+        Landmark* pLM = vpLandmarks[i];
+        if (!pLM)
+            continue;
+        if (pLM->isBad() || pLM->IsInKeyFrame(pKF))
+            continue;
+
+        cv::Mat p3Dw = pLM->GetWorldPos();
+        cv::Mat p3Dc = Rcw * p3Dw + tcw;
+
+        if (p3Dc.at<float>(2) < 0.0f)
+            continue;
+
+        const float invz = 1 / p3Dc.at<float>(2);
+        const float x = p3Dc.at<float>(0) * invz;
+        const float y = p3Dc.at<float>(1) * invz;
+
+        const float u = Calibration::fx * x + Calibration::cx;
+        const float v = Calibration::fy * y + Calibration::cy;
+
+        if (!pKF->IsInImage(u, v))
+            continue;
+
+        // Search in a radius
+        const vector<size_t> vIndices = pKF->GetFeaturesInArea(u, v, th);
+        if (vIndices.empty())
+            continue;
+
+        const cv::Mat dLM = pLM->GetDescriptor();
+
+        double bestDist1 = numeric_limits<double>::max();
+        int bestQueryIdx = -1;
+        int bestTrainIdx = -1;
+
+        for (auto& j : vIndices) {
+            const cv::Mat& dKF = pKF->mDescriptors.row(j);
+            const double dist = DescriptorDistance(dLM, dKF);
+
+            if (dist < bestDist1) {
+                bestDist1 = dist;
+                bestQueryIdx = j;
+                bestTrainIdx = i;
+            }
+        }
+
+        // If there is already a MapPoint replace otherwise add new measurement
+        if (bestDist1 <= TH_LOW) {
+            Landmark* pLMinKF = pKF->GetLandmark(bestQueryIdx);
+            if (pLMinKF) {
+                if (!pLMinKF->isBad()) {
+                    if (pLMinKF->Observations() > pLM->Observations())
+                        pLM->Replace(pLMinKF);
+                    else
+                        pLMinKF->Replace(pLM);
+                }
+            } else {
+                pLM->AddObservation(pKF, bestQueryIdx);
+                pKF->AddLandmark(pLM, bestQueryIdx);
+            }
+
+            nFused++;
+            // cv::DMatch match12(bestQueryIdx, bestTrainIdx, bestDist1);
+            // vMatches12.push_back(match12);
+        }
+    }
+
+    return nFused;
 }
 
 void Matcher::DrawMatches(Frame& pF1, Frame& pF2, const std::vector<cv::DMatch>& m12, const int delay, const string& title)

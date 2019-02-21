@@ -10,6 +10,7 @@ long unsigned int KeyFrame::nNextKFid = 0;
 
 KeyFrame::KeyFrame(Frame& frame, Map* pMap, Database* pKFDB)
     : mnFrameId(frame.GetId())
+    , mnFuseTargetForKF(0)
     , mnLoopQuery(0)
     , mnLoopWords(0)
     , mpKeyFrameDB(pKFDB)
@@ -37,7 +38,7 @@ KeyFrame::KeyFrame(Frame& frame, Map* pMap, Database* pKFDB)
     if (!framePose.empty())
         SetPose(framePose);
 
-    mvpLandmarks = frame.GetLandmarksMatched();
+    mvpLandmarks = frame.GetLandmarks();
     mG.SetRootNode(this);
 
     unique_lock<mutex> lock(mMutexId);
@@ -59,7 +60,57 @@ void KeyFrame::SetErase()
     }
 }
 
+vector<size_t> KeyFrame::GetFeaturesInArea(const float& x, const float& y, const float& r) const
+{
+    vector<size_t> vIndices;
+    vIndices.reserve(N);
+
+    for (size_t i = 0; i < N; ++i) {
+        const cv::KeyPoint& kp = mvKeys[i];
+
+        const float distx = kp.pt.x - x;
+        const float disty = kp.pt.y - y;
+
+        if (fabs(distx) < r && fabs(disty) < r)
+            vIndices.push_back(i);
+    }
+
+    return vIndices;
+}
+
+bool KeyFrame::IsInImage(const float& x, const float& y) const
+{
+    return (x >= 0.0f && x < mImGray.cols && y >= 0.0f && y < mImGray.rows);
+}
+
 void KeyFrame::SetBadFlag()
 {
+    if (GetId() == 0)
+        return;
+    else if (mbNotErase) {
+        mbToBeErased = true;
+        return;
+    }
 
+    mG.EraseRootConnections();
+
+    {
+        unique_lock<mutex> lockFeat(mMutexFeatures);
+        for (size_t i = 0; i < mvpLandmarks.size(); ++i) {
+            if (mvpLandmarks[i])
+                mvpLandmarks[i]->EraseObservation(this);
+        }
+    }
+
+    mG.UpdateSpanningTree();
+    mTcw = GetPose() * mG.GetParent()->GetPoseInv();
+    mbBad = true;
+
+    mpMap->EraseKF(this);
+    mpKeyFrameDB->Erase(this);
+}
+
+bool KeyFrame::isBad()
+{
+    return mbBad;
 }

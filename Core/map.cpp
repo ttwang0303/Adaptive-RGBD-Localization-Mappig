@@ -20,6 +20,18 @@ void Map::AddLandmark(Landmark* pLMK)
     mspLandmarks.insert(pLMK);
 }
 
+void Map::EraseLandmark(Landmark* pLM)
+{
+    unique_lock<mutex> lock(mMutexMap);
+    mspLandmarks.erase(pLM);
+}
+
+void Map::EraseKF(KeyFrame* pKF)
+{
+    unique_lock<mutex> lock(mMutexMap);
+    mspKeyFrames.erase(pKF);
+}
+
 vector<KeyFrame*> Map::GetAllKeyFrames()
 {
     unique_lock<mutex> lock(mMutexMap);

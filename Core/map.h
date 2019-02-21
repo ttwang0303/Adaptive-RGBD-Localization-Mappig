@@ -14,6 +14,8 @@ public:
 
     void AddKeyFrame(KeyFrame* pKF);
     void AddLandmark(Landmark* pLMK);
+    void EraseLandmark(Landmark* pLM);
+    void EraseKF(KeyFrame* pKF);
 
     std::vector<KeyFrame*> GetAllKeyFrames();
     std::vector<Landmark*> GetAllLandmarks();

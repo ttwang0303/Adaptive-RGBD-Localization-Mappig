@@ -80,10 +80,7 @@ void Extractor::CreateDetector()
     case FAST:
         mpDetector = cv::FastFeatureDetector::create();
         break;
-    case HARRIS:
-        mpDetector = cv::GFTTDetector::create(nFeatures, 0.01, 1, 3, true, 0.04);
-        break;
-    case SHI_TOMASI:
+    case GFTT:
         mpDetector = cv::GFTTDetector::create(nFeatures, 0.01, 5, 3, false, 0.04);
         break;
     case STAR:

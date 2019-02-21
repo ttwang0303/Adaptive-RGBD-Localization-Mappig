@@ -5,6 +5,7 @@
 
 class Frame;
 class KeyFrame;
+class Landmark;
 
 class Matcher {
 public:
@@ -15,6 +16,9 @@ public:
     size_t KnnMatch(Frame& pF1, Frame& pF2, std::vector<cv::DMatch>& vMatches12);
 
     int BoWMatch(KeyFrame* pKF1, KeyFrame* pKF2, std::vector<cv::DMatch>& vMatches12);
+
+    // Project Landmarks into pKF and search for duplicated
+    int Fuse(KeyFrame* pKF, const std::vector<Landmark*>& vpLandmarks, const float th = 3.0);
 
     static void DrawMatches(Frame& pF1, Frame& pF2, const std::vector<cv::DMatch>& m12, const int delay = 1, const std::string& title = "Matches");
     static void DrawKeyPoints(Frame& pF1, const int delay = 1);

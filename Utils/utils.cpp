@@ -209,7 +209,7 @@ void UpdateLastFrame(Frame& lastFrame, Map* pMap)
 
         if (bCreateNew) {
             cv::Mat x3Dw = lastFrame.UnprojectWorld(idx);
-            Landmark* pNewLM = new Landmark(x3Dw, pMap, lastFrame, idx);
+            Landmark* pNewLM = new Landmark(x3Dw, pMap, &lastFrame, idx);
             lastFrame.AddLandmark(pNewLM, idx);
             nPoints++;
         } else
@@ -237,6 +237,6 @@ bool NeedNewKF(KeyFrame* pKFref, Frame& currentFrame)
     static const double mint = 0.25;
     static const double minR = 0.25;
 
-    cv::Mat delta = currentFrame.GetPose().inv() * pKFref->GetPose();
+    cv::Mat delta = currentFrame.GetPoseInv() * pKFref->GetPose();
     return (tNorm(delta) > mint || RNorm(delta) > minR);
 }

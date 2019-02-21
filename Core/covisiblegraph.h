@@ -26,14 +26,16 @@ public:
     std::vector<KeyFrame*> GetNodesByWeight(const int& w);
     std::vector<KeyFrame*> GetOrderedNodes();
     int GetWeight(KeyFrame* pKF);
+    void EraseRootConnections();
 
     // Spanning tree functions
     void AddChild(KeyFrame* pKF);
     void EraseChild(KeyFrame* pKF);
     void ChangeParent(KeyFrame* pKF);
-    std::set<KeyFrame*> GetChildSet();
+    std::set<KeyFrame*> GetChildrenSet();
     KeyFrame* GetParent();
     bool hasChild(KeyFrame* pKF);
+    void UpdateSpanningTree();
 
     // Loop edges functions
     void AddLoopEdge(KeyFrame* pKF);
@@ -56,7 +58,7 @@ protected:
     // Loop edges
     std::set<KeyFrame*> mspLoopEdges;
 
-    std::mutex mMutexConnections;
+    std::mutex mMutexGraph;
 };
 
 #endif

@@ -74,10 +74,10 @@ int PnPSolver::Compute(Frame* pFrame)
             edge->setRobustKernel(rk);
             rk->setDelta(delta);
 
-            edge->fx = fx;
-            edge->fy = fy;
-            edge->cx = cx;
-            edge->cy = cy;
+            edge->fx = Calibration::fx;
+            edge->fy = Calibration::fy;
+            edge->cx = Calibration::cx;
+            edge->cy = Calibration::cy;
 
             edge->Xw[0] = Xw.at<float>(0);
             edge->Xw[1] = Xw.at<float>(1);

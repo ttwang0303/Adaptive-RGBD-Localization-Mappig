@@ -11,22 +11,34 @@ class Frame;
 
 class Landmark {
 public:
-    Landmark(const cv::Mat& Pos, Map* pMap, KeyFrame* pKF, const size_t& idx);
-
-    Landmark(const cv::Mat& Pos, Map* pMap, Frame& pF, const size_t& idx);
+    Landmark(const cv::Mat& Pos, KeyFrame* pKF, Map* pMap);
+    Landmark(const cv::Mat& Pos, Map* pMap, Frame* pFrame, const size_t& idx);
 
     void SetWorldPos(const cv::Mat& Pos);
     cv::Mat GetWorldPos();
 
     std::map<KeyFrame*, size_t> GetObservations();
     void AddObservation(KeyFrame* pKF, size_t idx);
+    void EraseObservation(KeyFrame* pKF);
     int Observations();
 
     // Check in which KFs this landmark is seen. Increase counter for those KFs
     // Exclude noId
     void Covisibility(std::map<KeyFrame*, int>& KFcounter, long unsigned int noId);
 
+    bool IsInKeyFrame(KeyFrame* pKF);
+
+    void SetBadFlag();
     bool isBad();
+
+    void Replace(Landmark* pLM);
+
+    void IncreaseVisible(int n = 1);
+    void IncreaseFound(int n = 1);
+    float GetFoundRatio();
+
+    void ComputeDistinctiveDescriptors();
+    cv::Mat GetDescriptor();
 
 public:
     long unsigned int mnId;
@@ -38,6 +50,8 @@ public:
     // Used by Tracking
     bool mbTrackInView;
     long unsigned int mnLastFrameSeen;
+
+    long unsigned int mnFuseCandidateForKF;
 
     static std::mutex mGlobalMutex;
 
@@ -51,8 +65,15 @@ private:
     // Best descriptor to fast matching
     cv::Mat mDescriptor;
 
+    // Reference KeyFrame
+    KeyFrame* mpRefKF;
+
+    int mnVisible;
+    int mnFound;
+
     // Bad flag
     bool mbBad;
+    Landmark* mpReplaced;
 
     Map* mpMap;
 
