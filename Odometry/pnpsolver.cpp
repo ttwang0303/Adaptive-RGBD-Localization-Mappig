@@ -54,8 +54,8 @@ int PnPSolver::Compute(Frame* pFrame)
             Landmark* pLM = pFrame->GetLandmark(i);
             if (!pLM)
                 continue;
-            cv::Mat Xw = pLM->GetWorldPos();
 
+            cv::Mat Xw = pLM->GetWorldPos();
             nInitialCorrespondences++;
             pFrame->SetInlier(i);
 

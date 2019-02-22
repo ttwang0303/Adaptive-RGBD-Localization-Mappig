@@ -21,7 +21,7 @@ public:
     Odometry(const eAlgorithm& algorithm);
     ~Odometry();
 
-    void Compute(Frame& pF1, Frame& pF2, const std::vector<cv::DMatch>& vMatches12);
+    void Compute(Frame *pF1, Frame *pF2, const std::vector<cv::DMatch>& vMatches12);
 
     Ransac* mpRansac;
     GeneralizedICP* mpGicp;

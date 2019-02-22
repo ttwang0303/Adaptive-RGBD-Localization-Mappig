@@ -13,17 +13,17 @@ long unsigned int Frame::nNextId = 0;
 
 Frame::Frame() {}
 
-Frame::Frame(cv::Mat& imColor, cv::Mat& imDepth, double timestamp)
+Frame::Frame(const cv::Mat& imColor, const cv::Mat& imDepth, const double& timestamp)
     : mImColor(imColor)
     , mTimestamp(timestamp)
     , mpCloud(nullptr)
 {
+    cv::cvtColor(mImColor, mImGray, cv::COLOR_BGR2GRAY);
+    imDepth.convertTo(mImDepth, CV_32F, Calibration::depthFactor);
+
     // Frame ID
     unique_lock<mutex> lock(mMutexId);
     mnId = nNextId++;
-
-    cv::cvtColor(mImColor, mImGray, cv::COLOR_BGR2GRAY);
-    imDepth.convertTo(mImDepth, CV_32F, Calibration::depthFactor);
 }
 
 Frame::Frame(cv::Mat& imColor)
@@ -35,6 +35,19 @@ Frame::Frame(cv::Mat& imColor)
     cv::cvtColor(mImColor, mImGray, cv::COLOR_BGR2GRAY);
 
     // Frame ID
+    unique_lock<mutex> lock(mMutexId);
+    mnId = nNextId++;
+}
+
+void Frame::Initialize(const cv::Mat& imColor, const cv::Mat& imDepth, const double& timestamp)
+{
+    mImColor = imColor;
+    mTimestamp = timestamp;
+    mpCloud = nullptr;
+
+    cv::cvtColor(mImColor, mImGray, cv::COLOR_BGR2GRAY);
+    imDepth.convertTo(mImDepth, CV_32F, Calibration::depthFactor);
+
     unique_lock<mutex> lock(mMutexId);
     mnId = nNextId++;
 }
@@ -282,6 +295,7 @@ const Frame& Frame::operator=(Frame& frame)
         mBowVec = frame.mBowVec;
         mFeatVec = frame.mFeatVec;
         N = frame.N;
+        mpReferenceKF = frame.mpReferenceKF;
         mnId = frame.GetId();
 
         if (frame.mpCloud)

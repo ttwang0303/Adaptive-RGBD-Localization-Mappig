@@ -20,11 +20,42 @@ Matcher::Matcher(float nnratio)
     }
 }
 
+size_t Matcher::KnnMatch(KeyFrame* pKF1, Frame& F2, vector<cv::DMatch>& vMatches12)
+{
+    vector<vector<cv::DMatch>> matchesKnn;
+    mpMatcher->knnMatch(pKF1->mDescriptors, F2.mDescriptors, matchesKnn, 2);
+
+    const vector<Landmark*> vpLandmarksKF1 = pKF1->GetLandmarks();
+
+    for (size_t i = 0; i < matchesKnn.size(); i++) {
+        cv::DMatch& m1 = matchesKnn[i][0];
+        cv::DMatch& m2 = matchesKnn[i][1];
+
+        if (m1.distance < mfNNratio * m2.distance) {
+            size_t i1 = m1.queryIdx;
+            size_t i2 = m1.trainIdx;
+            Landmark* pLM = vpLandmarksKF1[i1];
+
+            if (!pLM)
+                continue;
+            if (pLM->isBad())
+                continue;
+            if (F2.GetLandmark(i2))
+                continue;
+
+            F2.AddLandmark(pLM, i2);
+            F2.SetOutlier(i2);
+            vMatches12.push_back(m1);
+        }
+    }
+
+    return vMatches12.size();
+}
+
 size_t Matcher::KnnMatch(Frame& pF1, Frame& pF2, vector<cv::DMatch>& vMatches12)
 {
     vMatches12.clear();
     vector<vector<cv::DMatch>> matchesKnn;
-    set<int> trainIdxs;
 
     mpMatcher->knnMatch(pF1.mDescriptors, pF2.mDescriptors, matchesKnn, 2);
 
@@ -33,11 +64,9 @@ size_t Matcher::KnnMatch(Frame& pF1, Frame& pF2, vector<cv::DMatch>& vMatches12)
         cv::DMatch& m2 = matchesKnn[i][1];
 
         if (m1.distance < mfNNratio * m2.distance) {
-            if (trainIdxs.count(m1.trainIdx) > 0)
-                continue;
-
             const size_t i1 = m1.queryIdx;
             const size_t i2 = m1.trainIdx;
+
             Landmark* pLM = pF1.GetLandmark(i1);
             if (!pLM)
                 continue;
@@ -51,7 +80,6 @@ size_t Matcher::KnnMatch(Frame& pF1, Frame& pF2, vector<cv::DMatch>& vMatches12)
 
             pF2.AddLandmark(pLM, i2);
             pF2.SetOutlier(i2);
-            trainIdxs.insert(m1.trainIdx);
             vMatches12.push_back(m1);
         }
     }

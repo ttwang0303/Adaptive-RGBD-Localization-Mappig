@@ -10,6 +10,7 @@
 class Landmark;
 class Extractor;
 class Map;
+class KeyFrame;
 
 class Frame {
 public:
@@ -18,9 +19,11 @@ public:
 public:
     Frame();
 
-    Frame(cv::Mat& imColor, cv::Mat& imDepth, double mTimestamp);
+    Frame(const cv::Mat& imColor, const cv::Mat& imDepth, const double& timestamp);
 
     Frame(cv::Mat& imColor);
+
+    void Initialize(const cv::Mat& imColor, const cv::Mat& imDepth, const double& timestamp);
 
     // Pose functions
     void SetPose(cv::Mat Tcw);
@@ -90,6 +93,9 @@ public:
 
     // Current and Next Frame id.
     static long unsigned int nNextId;
+
+    // Reference Keyframe.
+    KeyFrame* mpReferenceKF;
 
 protected:
     long unsigned int mnId;

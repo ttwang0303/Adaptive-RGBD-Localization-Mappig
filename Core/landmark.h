@@ -32,6 +32,7 @@ public:
     bool isBad();
 
     void Replace(Landmark* pLM);
+    Landmark* GetReplaced();
 
     void IncreaseVisible(int n = 1);
     void IncreaseFound(int n = 1);

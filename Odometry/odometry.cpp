@@ -40,13 +40,12 @@ Odometry::~Odometry()
         delete mpBA;
 }
 
-void Odometry::Compute(Frame& pF1, Frame& pF2, const vector<cv::DMatch>& vMatches12)
+void Odometry::Compute(Frame* pF1, Frame* pF2, const vector<cv::DMatch>& vMatches12)
 {
-
     // Adaptive
     if (mOdometryAlgorithm == ADAPTIVE) {
         // Run RANSAC
-        mpRansac->Iterate(&pF1, &pF2, vMatches12);
+        mpRansac->Iterate(pF1, pF2, vMatches12);
         cv::Mat T12;
 
         // Refine with ICP
@@ -69,27 +68,27 @@ void Odometry::Compute(Frame& pF1, Frame& pF2, const vector<cv::DMatch>& vMatche
         }
 
         // Composition rule
-        T12 = T12 * pF1.GetPose();
-        pF2.SetPose(T12);
+        T12 = T12 * pF1->GetPose();
+        pF2->SetPose(T12);
 
         // Update inlier flag
         for (const auto& m : mpRansac->mvInliers)
-            pF2.SetInlier(m.trainIdx);
+            pF2->SetInlier(m.trainIdx);
 
     }
 
     // Ransac
     else if (mOdometryAlgorithm == RANSAC) {
-        mpRansac->Iterate(&pF1, &pF2, vMatches12);
+        mpRansac->Iterate(pF1, pF2, vMatches12);
         cv::Mat T12 = Converter::toMat<float, 4, 4>(mpRansac->mT12);
 
         // Composition rule
-        T12 = T12 * pF1.GetPose();
-        pF2.SetPose(T12);
+        T12 = T12 * pF1->GetPose();
+        pF2->SetPose(T12);
 
         // Update inlier flag
         for (const auto& m : mpRansac->mvInliers)
-            pF2.SetInlier(m.trainIdx);
+            pF2->SetInlier(m.trainIdx);
 
     }
 
@@ -100,20 +99,20 @@ void Odometry::Compute(Frame& pF1, Frame& pF2, const vector<cv::DMatch>& vMatche
 
     // Motion only Bundle Adjustment
     else if (mOdometryAlgorithm == MOTION_ONLY_BA) {
-        mpBA->Compute(&pF2);
+        mpBA->Compute(pF2);
     }
 
     // Ransac + Motion only Bundle Adjustment
     else if (mOdometryAlgorithm == ADAPTIVE_2) {
         // Get initial estimation
-        mpRansac->Iterate(&pF1, &pF2, vMatches12);
+        mpRansac->Iterate(pF1, pF2, vMatches12);
         cv::Mat T12 = Converter::toMat<float, 4, 4>(mpRansac->mT12);
 
         // Composition rule
-        T12 = T12 * pF1.GetPose();
-        pF2.SetPose(T12);
+        T12 = T12 * pF1->GetPose();
+        pF2->SetPose(T12);
 
         // Refine
-        mpBA->Compute(&pF2);
+        mpBA->Compute(pF2);
     }
 }

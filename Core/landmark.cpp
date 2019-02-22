@@ -180,6 +180,13 @@ void Landmark::Replace(Landmark* pLM)
     mpMap->EraseLandmark(this);
 }
 
+Landmark* Landmark::GetReplaced()
+{
+    unique_lock<mutex> lock1(mMutexFeatures);
+    unique_lock<mutex> lock2(mMutexPos);
+    return mpReplaced;
+}
+
 void Landmark::IncreaseVisible(int n)
 {
     unique_lock<mutex> lock(mMutexFeatures);

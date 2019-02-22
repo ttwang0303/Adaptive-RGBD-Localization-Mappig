@@ -1,9 +1,9 @@
 #include "localmapping.h"
 #include "Features/matcher.h"
 #include "Odometry/localbundleadjustment.h"
-#include "keyframe.h"
-#include "landmark.h"
-#include "map.h"
+#include "Core/keyframe.h"
+#include "Core/landmark.h"
+#include "Core/map.h"
 #include <iostream>
 
 using namespace std;

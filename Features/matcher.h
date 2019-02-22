@@ -13,6 +13,8 @@ public:
 
     static double DescriptorDistance(const cv::Mat& a, const cv::Mat& b);
 
+    size_t KnnMatch(KeyFrame* pKF1, Frame& F2, std::vector<cv::DMatch>& vMatches12);
+
     size_t KnnMatch(Frame& pF1, Frame& pF2, std::vector<cv::DMatch>& vMatches12);
 
     int BoWMatch(KeyFrame* pKF1, KeyFrame* pKF2, std::vector<cv::DMatch>& vMatches12);

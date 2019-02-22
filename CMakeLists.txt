@@ -107,7 +107,9 @@ Core/map.cpp
 Core/keyframe.cpp
 Core/keyframedatabase.cpp
 Core/covisiblegraph.cpp
-Core/localmapping.cpp
+
+System/tracking.cpp
+System/localmapping.cpp
 
 Drawer/viewer.cpp
 Drawer/pointclouddrawer.cpp
