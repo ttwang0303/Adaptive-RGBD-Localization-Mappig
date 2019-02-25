@@ -11,14 +11,20 @@ class Landmark;
 class Database;
 class Extractor;
 class Odometry;
+class LocalMapping;
 
 class Tracking {
 public:
     Tracking(DBoW3::Vocabulary* pVoc, Map* pMap, Database* pKFDB, Extractor* pExtractor);
 
+    void SetLocalMapper(LocalMapping* pLocalMapper);
+
     void SetOdometer(Odometry* pOdometer);
 
     cv::Mat Track(const cv::Mat& imColor, const cv::Mat& imDepth, const double& timestamp);
+
+    void SaveTrajectory(const std::string& filename);
+    void SaveKeyFrameTrajectory(const std::string filename);
 
 public:
     enum eTrackingState {
@@ -33,7 +39,11 @@ public:
     eTrackingState mLastProcessedState;
 
     // Current Frame
-    Ptr<Frame> mCurrentFrame;
+    Ptr<Frame> mpCurrentFrame;
+
+    std::list<cv::Mat> mlRelativeFramePoses;
+    std::list<KeyFrame*> mlpReferences;
+    std::list<double> mlFrameTimes;
 
 protected:
     void Initialization();
@@ -53,7 +63,15 @@ protected:
     bool NeedNewKF();
     void CreateNewKF();
 
+    // Local map functions
     bool TrackLocalMap();
+    void UpdateLocalKFs();
+    void UpdateLocalLMs();
+    void SearchLocalLMs();
+
+    void UpdateRelativePose();
+
+    LocalMapping* mpLocalMapper;
 
     // BoW
     DBoW3::Vocabulary* mpVocabulary;
@@ -73,7 +91,7 @@ protected:
     int mnMatchesInliers;
 
     KeyFrame* mpLastKF;
-    Ptr<Frame> mLastFrame;
+    Ptr<Frame> mpLastFrame;
     unsigned int mnLastKFid;
 
     // Motion model

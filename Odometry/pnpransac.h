@@ -1,11 +1,11 @@
 #ifndef PNPRANSAC_H
 #define PNPRANSAC_H
 
+class Frame;
 
-class PnPRansac
-{
+class PnPRansac {
 public:
-    PnPRansac();
+    static int Compute(Frame& frame);
 };
 
 #endif // PNPRANSAC_H

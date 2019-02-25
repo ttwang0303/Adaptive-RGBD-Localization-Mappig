@@ -26,7 +26,7 @@ void Map::EraseLandmark(Landmark* pLM)
     mspLandmarks.erase(pLM);
 }
 
-void Map::EraseKF(KeyFrame* pKF)
+void Map::EraseKeyFrame(KeyFrame* pKF)
 {
     unique_lock<mutex> lock(mMutexMap);
     mspKeyFrames.erase(pKF);

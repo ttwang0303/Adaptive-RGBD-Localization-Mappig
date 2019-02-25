@@ -9,7 +9,7 @@
 
 using namespace std;
 
-long unsigned int Frame::nNextId = 0;
+long unsigned int Frame::nNextFrameId = 0;
 
 Frame::Frame() {}
 
@@ -21,9 +21,7 @@ Frame::Frame(const cv::Mat& imColor, const cv::Mat& imDepth, const double& times
     cv::cvtColor(mImColor, mImGray, cv::COLOR_BGR2GRAY);
     imDepth.convertTo(mImDepth, CV_32F, Calibration::depthFactor);
 
-    // Frame ID
-    unique_lock<mutex> lock(mMutexId);
-    mnId = nNextId++;
+    mnId = nNextFrameId++;
 }
 
 Frame::Frame(cv::Mat& imColor)
@@ -34,27 +32,11 @@ Frame::Frame(cv::Mat& imColor)
 {
     cv::cvtColor(mImColor, mImGray, cv::COLOR_BGR2GRAY);
 
-    // Frame ID
-    unique_lock<mutex> lock(mMutexId);
-    mnId = nNextId++;
-}
-
-void Frame::Initialize(const cv::Mat& imColor, const cv::Mat& imDepth, const double& timestamp)
-{
-    mImColor = imColor;
-    mTimestamp = timestamp;
-    mpCloud = nullptr;
-
-    cv::cvtColor(mImColor, mImGray, cv::COLOR_BGR2GRAY);
-    imDepth.convertTo(mImDepth, CV_32F, Calibration::depthFactor);
-
-    unique_lock<mutex> lock(mMutexId);
-    mnId = nNextId++;
+    mnId = nNextFrameId++;
 }
 
 void Frame::SetPose(cv::Mat Tcw)
 {
-    unique_lock<mutex> lock(mMutexPose);
     mTcw = Tcw.clone();
 
     // Update pose matrices
@@ -69,40 +51,64 @@ void Frame::SetPose(cv::Mat Tcw)
     mOw.copyTo(Twc.rowRange(0, 3).col(3));
 }
 
-cv::Mat Frame::GetPose()
+cv::Mat Frame::GetPose() { return mTcw.clone(); }
+
+cv::Mat Frame::GetPoseInv() { return Twc.clone(); }
+
+cv::Mat Frame::GetRotationInv() { return mRwc.clone(); }
+
+cv::Mat Frame::GetCameraCenter() { return mOw.clone(); }
+
+cv::Mat Frame::GetRotation() { return mRcw.clone(); }
+
+cv::Mat Frame::GetTranslation() { return mtcw.clone(); }
+
+void Frame::UpdatePoseMatrices()
 {
-    unique_lock<mutex> lock(mMutexPose);
-    return mTcw.clone();
+    // Update pose matrices
+    mRcw = mTcw.rowRange(0, 3).colRange(0, 3);
+    mRwc = mRcw.t();
+    mtcw = mTcw.rowRange(0, 3).col(3);
+    mOw = -mRcw.t() * mtcw;
+
+    // Transform from camera into world frame
+    Twc = cv::Mat::eye(4, 4, mTcw.type());
+    mRwc.copyTo(Twc.rowRange(0, 3).colRange(0, 3));
+    mOw.copyTo(Twc.rowRange(0, 3).col(3));
 }
 
-cv::Mat Frame::GetPoseInv()
+bool Frame::isInFrustum(Landmark* pLM)
 {
-    unique_lock<mutex> lock(mMutexPose);
-    return Twc.clone();
-}
+    pLM->mbTrackInView = false;
 
-cv::Mat Frame::GetRotationInv()
-{
-    unique_lock<mutex> lock(mMutexPose);
-    return mRwc.clone();
-}
+    // 3D in absolute coordinates
+    cv::Mat P = pLM->GetWorldPos();
 
-cv::Mat Frame::GetCameraCenter()
-{
-    unique_lock<mutex> lock(mMutexPose);
-    return mOw.clone();
-}
+    // 3D in camera coordinates
+    const cv::Mat Pc = mRcw * P + mtcw;
+    const float& PcX = Pc.at<float>(0);
+    const float& PcY = Pc.at<float>(1);
+    const float& PcZ = Pc.at<float>(2);
 
-cv::Mat Frame::GetRotation()
-{
-    unique_lock<mutex> lock(mMutexPose);
-    return mRcw.clone();
-}
+    if (PcZ < 0.0f)
+        return false;
 
-cv::Mat Frame::GetTranslation()
-{
-    unique_lock<mutex> lock(mMutexPose);
-    return mtcw.clone();
+    // Project in image and check it is not outside
+    const float invz = 1.0f / PcZ;
+    const float u = Calibration::fx * PcX * invz + Calibration::cx;
+    const float v = Calibration::fy * PcY * invz + Calibration::cy;
+
+    if (u < 0.0f || u > mImGray.cols)
+        return false;
+    if (v < 0.0f || v > mImGray.rows)
+        return false;
+
+    // Data used by the tracking
+    pLM->mbTrackInView = true;
+    pLM->mTrackProjX = u;
+    pLM->mTrackProjY = v;
+
+    return true;
 }
 
 void Frame::ExtractFeatures(Extractor* pExtractor)
@@ -110,10 +116,7 @@ void Frame::ExtractFeatures(Extractor* pExtractor)
     pExtractor->Extract(mImColor, cv::Mat(), mvKeys, mDescriptors);
 
     N = mvKeys.size();
-    {
-        unique_lock<mutex> lock(mMutexFeatures);
-        mvpLandmarks = vector<Landmark*>(N, static_cast<Landmark*>(nullptr));
-    }
+    mvpLandmarks = vector<Landmark*>(N, static_cast<Landmark*>(nullptr));
 
     mvKeys3Dc = vector<cv::Point3f>(N, cv::Point3f(0, 0, 0));
     mvbOutlier = vector<bool>(N, false);
@@ -200,48 +203,11 @@ void Frame::StatisticalOutlierRemovalFilterCloud(int meanK, double stddev)
     sor.filter(*mpCloud);
 }
 
-void Frame::AddLandmark(Landmark* pLandmark, const size_t& idx)
-{
-    unique_lock<mutex> lock(mMutexFeatures);
-    mvpLandmarks[idx] = pLandmark;
-}
+void Frame::AddLandmark(Landmark* pLandmark, const size_t& idx) { mvpLandmarks[idx] = pLandmark; }
 
-set<Landmark*> Frame::GetLandmarkSet()
-{
-    unique_lock<mutex> lock(mMutexFeatures);
-    set<Landmark*> s;
-    for (Landmark* pLMK : mvpLandmarks) {
-        if (!pLMK)
-            continue;
+vector<Landmark*> Frame::GetLandmarks() { return mvpLandmarks; }
 
-        s.insert(pLMK);
-    }
-    return s;
-}
-
-vector<Landmark*> Frame::GetLandmarks()
-{
-    unique_lock<mutex> lock(mMutexFeatures);
-    return mvpLandmarks;
-}
-
-Landmark* Frame::GetLandmark(const size_t& idx)
-{
-    unique_lock<mutex> lock(mMutexFeatures);
-    return mvpLandmarks[idx];
-}
-
-void Frame::EraseLandmark(const size_t& idx)
-{
-    unique_lock<mutex> lock(mMutexFeatures);
-    mvpLandmarks[idx] = static_cast<Landmark*>(nullptr);
-}
-
-void Frame::ReplaceLandmark(const size_t& idx, Landmark* pLM)
-{
-    unique_lock<mutex> lock(mMutexFeatures);
-    mvpLandmarks[idx] = pLM;
-}
+Landmark* Frame::GetLandmark(const size_t& idx) { return mvpLandmarks[idx]; }
 
 cv::Mat Frame::UnprojectWorld(const size_t& i)
 {
@@ -249,64 +215,35 @@ cv::Mat Frame::UnprojectWorld(const size_t& i)
     if (p3Dc.z > 0) {
         cv::Mat x3Dc = (cv::Mat_<float>(3, 1) << p3Dc.x, p3Dc.y, p3Dc.z);
 
-        unique_lock<mutex> lock1(mMutexPose);
         return mRwc * x3Dc + mOw;
     } else
         return cv::Mat();
 }
 
-unsigned long Frame::GetId()
+vector<size_t> Frame::GetFeaturesInArea(const float& x, const float& y, const float& r) const
 {
-    unique_lock<mutex> lock(mMutexId);
-    return mnId;
-}
+    vector<size_t> vIndices;
+    vIndices.reserve(N);
 
-void Frame::SetOutlier(const size_t& idx)
-{
-    mvbOutlier[idx] = true;
-}
+    for (size_t i = 0; i < N; ++i) {
+        const cv::KeyPoint& kp = mvKeys[i];
 
-void Frame::SetInlier(const size_t& idx)
-{
-    mvbOutlier[idx] = false;
-}
+        const float distx = kp.pt.x - x;
+        const float disty = kp.pt.y - y;
 
-bool Frame::IsOutlier(const size_t& idx)
-{
-    return mvbOutlier[idx] == true;
-}
-
-bool Frame::IsInlier(const size_t& idx)
-{
-    return mvbOutlier[idx] == false;
-}
-
-const Frame& Frame::operator=(Frame& frame)
-{
-    if (&frame != this) {
-        mImColor = frame.mImColor;
-        mImGray = frame.mImGray;
-        mImDepth = frame.mImDepth;
-        mTimestamp = frame.mTimestamp;
-        mvKeys = frame.mvKeys;
-        mDescriptors = frame.mDescriptors;
-        mvKeys3Dc = frame.mvKeys3Dc;
-        mvbOutlier = frame.mvbOutlier;
-        mBowVec = frame.mBowVec;
-        mFeatVec = frame.mFeatVec;
-        N = frame.N;
-        mpReferenceKF = frame.mpReferenceKF;
-        mnId = frame.GetId();
-
-        if (frame.mpCloud)
-            mpCloud = frame.mpCloud;
-
-        cv::Mat framePose = frame.GetPose();
-        if (!framePose.empty())
-            SetPose(framePose);
-
-        mvpLandmarks = frame.GetLandmarks();
+        if (fabs(distx) < r && fabs(disty) < r)
+            vIndices.push_back(i);
     }
 
-    return *this;
+    return vIndices;
 }
+
+void Frame::SetOutlier(const size_t& idx) { mvbOutlier[idx] = true; }
+
+void Frame::SetInlier(const size_t& idx) { mvbOutlier[idx] = false; }
+
+bool Frame::IsOutlier(const size_t& idx) { return mvbOutlier[idx] == true; }
+
+bool Frame::IsInlier(const size_t& idx) { return mvbOutlier[idx] == false; }
+
+std::vector<bool> Frame::GetOutliers() { return mvbOutlier; }

@@ -22,10 +22,7 @@ public:
     void EraseObservation(KeyFrame* pKF);
     int Observations();
 
-    // Check in which KFs this landmark is seen. Increase counter for those KFs
-    // Exclude noId
-    void Covisibility(std::map<KeyFrame*, int>& KFcounter, long unsigned int noId);
-
+    int GetIndexInKeyFrame(KeyFrame* pKF);
     bool IsInKeyFrame(KeyFrame* pKF);
 
     void SetBadFlag();
@@ -49,9 +46,14 @@ public:
     int nObs;
 
     // Used by Tracking
+    float mTrackProjX;
+    float mTrackProjY;
     bool mbTrackInView;
+    long unsigned int mnTrackReferenceForFrame;
     long unsigned int mnLastFrameSeen;
 
+    // Used by local mapping
+    long unsigned int mnBALocalForKF;
     long unsigned int mnFuseCandidateForKF;
 
     static std::mutex mGlobalMutex;

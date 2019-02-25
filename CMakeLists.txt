@@ -99,6 +99,7 @@ Odometry/kabsch.cpp
 Odometry/odometry.cpp
 Odometry/pnpsolver.cpp
 Odometry/localbundleadjustment.cpp
+Odometry/pnpransac.cpp
 
 Core/frame.cpp
 Core/dbscan.cpp
@@ -106,13 +107,12 @@ Core/landmark.cpp
 Core/map.cpp
 Core/keyframe.cpp
 Core/keyframedatabase.cpp
-Core/covisiblegraph.cpp
 
 System/tracking.cpp
 System/localmapping.cpp
 
 Drawer/viewer.cpp
-Drawer/pointclouddrawer.cpp
+Drawer/mapdrawer.cpp
 
 Features/matcher.cpp
 Features/extractor.cpp

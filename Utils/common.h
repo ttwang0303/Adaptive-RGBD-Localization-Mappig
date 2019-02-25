@@ -32,10 +32,10 @@ const std::string BOLDWHITE = "\033[1m\033[37m";
 namespace Calibration {
 
 // -------- FR1 --------
-const double fx = 517.3;
-const double fy = 516.5;
-const double cx = 318.6;
-const double cy = 255.3;
+const float fx = 517.3f;
+const float fy = 516.5f;
+const float cx = 318.6f;
+const float cy = 255.3f;
 
 // -------- FR2 --------
 //const double fx = 520.9;
@@ -58,20 +58,11 @@ const double cy = 255.3;
 //const double cy = 243.99;
 
 // Common
-const double depthFactor = 1.0 / 5000.0;
-const double invfx = 1.0 / fx;
-const double invfy = 1.0 / fy;
+const float depthFactor = 1.0f / 5000.0f;
+const float invfx = 1.0f / fx;
+const float invfy = 1.0f / fy;
 }
 
 const int nFeatures = 1000;
-
-// Viewer
-const bool DRAW_LANDMARKS = true;
-const bool DRAW_KFS = true;
-const bool DRAW_DENSECLOUD = false;
-
-// Iaicp
-//const int height = 480;
-//const int width = 640;
 
 #endif // CONSTANTS_H

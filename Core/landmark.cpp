@@ -11,10 +11,12 @@ long unsigned int Landmark::nNextId = 0;
 mutex Landmark::mGlobalMutex;
 
 Landmark::Landmark(const cv::Mat& Pos, KeyFrame* pKF, Map* pMap)
-    : mnFirstKFid(pKF->GetId())
+    : mnFirstKFid(pKF->mnId)
     , mnFirstFrame(pKF->mnFrameId)
     , nObs(0)
+    , mnTrackReferenceForFrame(0)
     , mnLastFrameSeen(0)
+    , mnBALocalForKF(0)
     , mnFuseCandidateForKF(0)
     , mpRefKF(pKF)
     , mnVisible(1)
@@ -31,9 +33,11 @@ Landmark::Landmark(const cv::Mat& Pos, KeyFrame* pKF, Map* pMap)
 
 Landmark::Landmark(const cv::Mat& Pos, Map* pMap, Frame* pFrame, const size_t& idx)
     : mnFirstKFid(-1)
-    , mnFirstFrame(pFrame->GetId())
+    , mnFirstFrame(pFrame->mnId)
     , nObs(0)
+    , mnTrackReferenceForFrame(0)
     , mnLastFrameSeen(0)
+    , mnBALocalForKF(0)
     , mnFuseCandidateForKF(0)
     , mpRefKF(static_cast<KeyFrame*>(nullptr))
     , mnVisible(1)
@@ -123,14 +127,13 @@ int Landmark::Observations()
     return nObs;
 }
 
-void Landmark::Covisibility(map<KeyFrame*, int>& KFcounter, unsigned long noId)
+int Landmark::GetIndexInKeyFrame(KeyFrame* pKF)
 {
     unique_lock<mutex> lock(mMutexFeatures);
-    for (auto& [pKFobs, idx] : mObservations) {
-        if (pKFobs->GetId() == noId)
-            continue;
-        KFcounter[pKFobs]++;
-    }
+    if (mObservations.count(pKF))
+        return mObservations[pKF];
+    else
+        return -1;
 }
 
 bool Landmark::IsInKeyFrame(KeyFrame* pKF)

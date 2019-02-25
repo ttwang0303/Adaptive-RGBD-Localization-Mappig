@@ -1,9 +1,9 @@
 #include "localmapping.h"
-#include "Features/matcher.h"
-#include "Odometry/localbundleadjustment.h"
 #include "Core/keyframe.h"
 #include "Core/landmark.h"
 #include "Core/map.h"
+#include "Features/matcher.h"
+#include "Odometry/localbundleadjustment.h"
 #include <iostream>
 
 using namespace std;
@@ -29,30 +29,49 @@ void LocalMapping::Run()
     while (true) {
         SetAcceptKFs(false);
 
-        if (CheckNewKFs()) {
-            ProcessNewKF();
+        if (CheckNewKeyFrames()) {
+            ProcessNewKeyFrame();
+
             LandmarkCulling();
 
-            if (!CheckNewKFs())
+            if (!CheckNewKeyFrames())
                 FuseLandmarks();
 
             mbAbortBA = false;
 
-            if (!CheckNewKFs() && !StopRequested()) {
+            if (!CheckNewKeyFrames() && !StopRequested()) {
                 if (mpMap->KeyFramesInMap() > 2)
                     LocalBundleAdjustment::Compute(mpCurrentKF, &mbAbortBA, mpMap);
+
+                KeyFrameCulling();
             }
+        } else if (Stop()) {
+            // Safe area to stop
+            while (isStopped() && !CheckFinish())
+                usleep(3000);
+
+            if (CheckFinish())
+                break;
         }
+
+        ResetIfRequested();
+        SetAcceptKFs(true);
+
+        if (CheckFinish())
+            break;
+        usleep(3000);
     }
+
+    SetFinish();
 }
 
-bool LocalMapping::CheckNewKFs()
+bool LocalMapping::CheckNewKeyFrames()
 {
     unique_lock<mutex> lock(mMutexNewKFs);
     return (!mKeyFramesQueue.empty());
 }
 
-void LocalMapping::ProcessNewKF()
+void LocalMapping::ProcessNewKeyFrame()
 {
     {
         unique_lock<mutex> lock(mMutexNewKFs);
@@ -81,16 +100,16 @@ void LocalMapping::ProcessNewKF()
         }
     }
 
-    mpCurrentKF->mG.UpdateConnections();
+    mpCurrentKF->UpdateConnections();
     mpMap->AddKeyFrame(mpCurrentKF);
 }
 
 void LocalMapping::LandmarkCulling()
 {
     list<Landmark*>::iterator it = mlpRecentLandmarks.begin();
-    const unsigned long int nCurrentKFid = mpCurrentKF->GetId();
+    const unsigned long int nCurrentKFid = mpCurrentKF->mnId;
 
-    int nThObs = 3;
+    int nThObs = 2;
     const int cnThObs = nThObs;
 
     while (it != mlpRecentLandmarks.end()) {
@@ -113,18 +132,18 @@ void LocalMapping::LandmarkCulling()
 
 void LocalMapping::FuseLandmarks()
 {
-    const vector<KeyFrame*> vpNeighKFs = mpCurrentKF->mG.GetBestNodes(10);
+    const vector<KeyFrame*> vpNeighKFs = mpCurrentKF->GetBestCovisibilityKeyFrames(10);
     vector<KeyFrame*> vpTargetKFs;
 
     for (KeyFrame* pKFi : vpNeighKFs) {
-        if (pKFi->isBad() || pKFi->mnFuseTargetForKF == mpCurrentKF->GetId())
+        if (pKFi->isBad() || pKFi->mnFuseTargetForKF == mpCurrentKF->mnId)
             continue;
         vpTargetKFs.push_back(pKFi);
-        pKFi->mnFuseTargetForKF = mpCurrentKF->GetId();
+        pKFi->mnFuseTargetForKF = mpCurrentKF->mnId;
 
-        const vector<KeyFrame*> vpSecondNeighKFs = pKFi->mG.GetBestNodes(5);
+        const vector<KeyFrame*> vpSecondNeighKFs = pKFi->GetBestCovisibilityKeyFrames(5);
         for (KeyFrame* pKFi2 : vpSecondNeighKFs) {
-            if (pKFi2->isBad() || pKFi2->mnFuseTargetForKF == mpCurrentKF->GetId() || pKFi2->GetId() == mpCurrentKF->GetId())
+            if (pKFi2->isBad() || pKFi2->mnFuseTargetForKF == mpCurrentKF->mnId || pKFi2->mnId == mpCurrentKF->mnId)
                 continue;
             vpTargetKFs.push_back(pKFi2);
         }
@@ -134,7 +153,7 @@ void LocalMapping::FuseLandmarks()
     Matcher matcher;
     vector<Landmark*> vpLandmarks = mpCurrentKF->GetLandmarks();
     for (KeyFrame* pKFi : vpTargetKFs)
-        matcher.Fuse(pKFi, vpLandmarks, 5);
+        matcher.Fuse(pKFi, vpLandmarks, 3);
 
     // Search matches by projection from target KFs in current KF
     vector<Landmark*> vpFuseCandidates;
@@ -145,15 +164,15 @@ void LocalMapping::FuseLandmarks()
         for (Landmark* pLMi : vpLandmarksKFi) {
             if (!pLMi)
                 continue;
-            if (pLMi->isBad() || pLMi->mnFuseCandidateForKF == mpCurrentKF->GetId())
+            if (pLMi->isBad() || pLMi->mnFuseCandidateForKF == mpCurrentKF->mnId)
                 continue;
 
-            pLMi->mnFuseCandidateForKF = mpCurrentKF->GetId();
+            pLMi->mnFuseCandidateForKF = mpCurrentKF->mnId;
             vpFuseCandidates.push_back(pLMi);
         }
     }
 
-    matcher.Fuse(mpCurrentKF, vpFuseCandidates, 5);
+    matcher.Fuse(mpCurrentKF, vpFuseCandidates, 3);
 
     // Update points
     vpLandmarks = mpCurrentKF->GetLandmarks();
@@ -165,10 +184,55 @@ void LocalMapping::FuseLandmarks()
         }
     }
 
-    mpCurrentKF->mG.UpdateConnections();
+    mpCurrentKF->UpdateConnections();
 }
 
-void LocalMapping::InsertKF(KeyFrame* pKF)
+void LocalMapping::KeyFrameCulling()
+{
+    // Check redundant KFs (only local KFs)
+    // A KF is considered redundant if the 90% of the Landmarks it sees, are seen in at least
+    // other 3 KFs, only consider close points
+    vector<KeyFrame*> vpLocalKFs = mpCurrentKF->GetVectorCovisibleKeyFrames();
+    for (KeyFrame* pKF : vpLocalKFs) {
+        if (pKF->mnId == 0)
+            continue;
+
+        vector<Landmark*> vpLandmarks = pKF->GetLandmarks();
+
+        const int thObs = 3;
+        int nRedundantObs = 0;
+        int nLMs = 0;
+        for (size_t i = 0; i < vpLandmarks.size(); ++i) {
+            Landmark* pLM = vpLandmarks[i];
+            if (!pLM)
+                continue;
+            if (pLM->isBad())
+                continue;
+            if (pKF->mvKeys3Dc[i].z > 3.09f || pKF->mvKeys3Dc[i].z < 0)
+                continue;
+
+            nLMs++;
+            if (pLM->Observations() > thObs) {
+                const map<KeyFrame*, size_t> observations = pLM->GetObservations();
+                int nObs = 0;
+                for (auto& [pKFi, idx] : observations) {
+                    if (pKFi == pKF)
+                        continue;
+                    nObs++;
+                    if (nObs > thObs)
+                        break;
+                }
+                if (nObs >= thObs)
+                    nRedundantObs++;
+            }
+        }
+
+        if (nRedundantObs > 0.99 * nLMs)
+            pKF->SetBadFlag();
+    }
+}
+
+void LocalMapping::InsertKeyFrame(KeyFrame* pKF)
 {
     unique_lock<mutex> lock(mMutexNewKFs);
     mKeyFramesQueue.push_back(pKF);

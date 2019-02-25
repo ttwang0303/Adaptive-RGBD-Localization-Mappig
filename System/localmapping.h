@@ -16,7 +16,7 @@ public:
     // Main function
     void Run();
 
-    void InsertKF(KeyFrame* pKF);
+    void InsertKeyFrame(KeyFrame* pKF);
 
     // Thread Synch
     void RequestStop();
@@ -34,11 +34,18 @@ public:
     void RequestFinish();
     bool isFinished();
 
+    int KeyFramesInQueue()
+    {
+        std::unique_lock<std::mutex> lock(mMutexNewKFs);
+        return mKeyFramesQueue.size();
+    }
+
 protected:
-    bool CheckNewKFs();
-    void ProcessNewKF();
+    bool CheckNewKeyFrames();
+    void ProcessNewKeyFrame();
     void LandmarkCulling();
     void FuseLandmarks();
+    void KeyFrameCulling();
 
     void ResetIfRequested();
     bool mbResetRequested;

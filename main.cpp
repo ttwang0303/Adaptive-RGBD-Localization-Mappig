@@ -1,31 +1,21 @@
-#include "Core/frame.h"
-#include "Core/keyframe.h"
 #include "Core/keyframedatabase.h"
-#include "Core/landmark.h"
 #include "Core/map.h"
-#include "Drawer/pointclouddrawer.h"
+#include "Drawer/mapdrawer.h"
 #include "Drawer/viewer.h"
 #include "Features/extractor.h"
-#include "Features/matcher.h"
 #include "Odometry/odometry.h"
-#include "Odometry/pnpsolver.h"
-#include "Odometry/ransac.h"
+#include "System/localmapping.h"
 #include "System/tracking.h"
-#include "Utils/common.h"
-#include "Utils/converter.h"
 #include "Utils/utils.h"
-#include <algorithm>
 #include <iostream>
-#include <numeric>
-#include <opencv2/opencv.hpp>
+#include <opencv2/core.hpp>
 #include <pangolin/pangolin.h>
-#include <sstream>
 #include <thread>
 
 using namespace std;
 
-const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset_freiburg1_xyz/";
-const string vocDir = "./vocab/voc_fr1_ORB_ORB.yml.gz";
+const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset_freiburg1_desk/";
+const string vocDir = "./vocab/voc_fr1_GFTT_BRIEF.yml.gz";
 
 int main()
 {
@@ -61,8 +51,7 @@ int main()
          << endl;
 
     // This is a Feature-based method
-    Extractor* pExtractor = new Extractor(Extractor::ORB, Extractor::ORB, Extractor::ADAPTIVE);
-    Matcher* pMatcher = new Matcher(0.9f);
+    Extractor* pExtractor = new Extractor(Extractor::GFTT, Extractor::BRIEF, Extractor::NORMAL);
 
     // Store Landmarks and KeyFrames
     Map* pMap = new Map();
@@ -76,22 +65,26 @@ int main()
         terminate();
     }
     cout << " done." << endl;
+    cout << *pVocabulary << endl;
     Database* pKeyFrameDB = new Database(pVocabulary);
 
     // Map and pose viewer
-    PointCloudDrawer* pCloudDrawer = new PointCloudDrawer(pMap);
-    Viewer* pViewer = new Viewer(pCloudDrawer);
+    MapDrawer* pMapDrawer = new MapDrawer(pMap);
+    Viewer* pViewer = new Viewer(pMapDrawer);
     thread* ptViewer = new thread(&Viewer::Run, pViewer);
 
     // Odometry algorithm
-    Odometry* pOdometry = new Odometry(Odometry::RANSAC);
+    Odometry* pOdometry = new Odometry(Odometry::ADAPTIVE_2);
+
+    LocalMapping* pLocalMapper = new LocalMapping(pMap, pVocabulary);
+    thread* ptLocalMapping = new thread(&LocalMapping::Run, pLocalMapper);
 
     Tracking* pTracker = new Tracking(pVocabulary, pMap, pKeyFrameDB, pExtractor);
+    pTracker->SetLocalMapper(pLocalMapper);
     pTracker->SetOdometer(pOdometry);
 
     cv::Mat imColor, imDepth;
     cv::TickMeter tm;
-
     for (size_t n = 0; n < nImages; n += 1) {
         imColor = cv::imread(baseDir + vImageFilenamesRGB[n], cv::IMREAD_COLOR);
         imDepth = cv::imread(baseDir + vImageFilenamesD[n], cv::IMREAD_UNCHANGED);
@@ -103,23 +96,39 @@ int main()
 
     cout << "Mean tracking time: " << tm.getTimeSec() / tm.getCounter() << " s." << endl;
 
-    pViewer->RequestFinish();
-    while (!pViewer->isFinished())
+    pLocalMapper->RequestFinish();
+    if (pViewer) {
+        pViewer->RequestFinish();
+        while (!pViewer->isFinished())
+            usleep(5000);
+    }
+
+    while (!pLocalMapper->isFinished()) {
         usleep(5000);
+    }
+
     pangolin::BindToContext("Viewer");
 
     pKeyFrameDB->Clear();
-    pMap->Clear();
 
     ptViewer->join();
+    ptLocalMapping->join();
 
+    pTracker->SaveTrajectory("CameraTrajectory.txt");
+    pTracker->SaveKeyFrameTrajectory("KeyFrameTrajectory.txt");
+
+    pMap->Clear();
+
+    delete pTracker;
     delete pExtractor;
-    delete pMatcher;
-    delete pKeyFrameDB;
     delete pOdometry;
     delete ptViewer;
     delete pViewer;
-    delete pCloudDrawer;
+    delete pMapDrawer;
+    delete ptLocalMapping;
+    delete pLocalMapper;
+    delete pKeyFrameDB;
+    delete pVocabulary;
     delete pMap;
 
     return 0;

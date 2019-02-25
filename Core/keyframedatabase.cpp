@@ -59,10 +59,10 @@ vector<KeyFrame*> Database::Query(KeyFrame* pKF, float minScore)
             list<KeyFrame*> lKFs = mvInvertedFile[wordId];
 
             for (KeyFrame* pKFsw : lKFs) {
-                if (pKFsw->mnLoopQuery != pKF->GetId()) {
+                if (pKFsw->mnLoopQuery != pKF->mnId) {
                     pKFsw->mnLoopWords = 0;
-                    if (abs(static_cast<int>(pKF->GetId() - pKFsw->GetId())) > 10) {
-                        pKFsw->mnLoopQuery = pKF->GetId();
+                    if (abs(static_cast<int>(pKF->mnId - pKFsw->mnId)) > 10) {
+                        pKFsw->mnLoopQuery = pKF->mnId;
                         lKFsSharingWords.push_back(pKFsw);
                     }
                 }

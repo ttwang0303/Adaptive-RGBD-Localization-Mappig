@@ -1,13 +1,13 @@
 #include "viewer.h"
 #include "Utils/common.h"
-#include "pointclouddrawer.h"
+#include "mapdrawer.h"
 #include <pangolin/pangolin.h>
 #include <unistd.h>
 
 using namespace std;
 
-Viewer::Viewer(PointCloudDrawer* pCloudDrawer)
-    : mpCloudDrawer(pCloudDrawer)
+Viewer::Viewer(MapDrawer* pMapDrawer)
+    : mpMapDrawer(pMapDrawer)
     , mbFinishRequested(false)
     , mbFinished(true)
     , mbStopped(true)
@@ -33,6 +33,10 @@ void Viewer::Run()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    pangolin::CreatePanel("menu").SetBounds(0.0, 1.0, 0.0, pangolin::Attach::Pix(175));
+    pangolin::Var<size_t> menuKeyFrames("menu.KeyFrames: ", 0);
+    pangolin::Var<size_t> menuLandmarks("menu.Landmarks: ", 0);
+
     // Define Camera Render Object (for view / scene browsing)
     pangolin::OpenGlRenderState s_cam(
         pangolin::ProjectionMatrix(1024, 768, mViewpointF, mViewpointF, 512, 389, 0.1, 1000),
@@ -49,10 +53,8 @@ void Viewer::Run()
 
         d_cam.Activate(s_cam);
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-        mpCloudDrawer->DrawPointCloud(
-            DRAW_LANDMARKS, // Landmarks
-            DRAW_DENSECLOUD, // Dense cloud
-            DRAW_KFS); // KeyFrames
+        menuKeyFrames = mpMapDrawer->DrawKeyFrames(true, true);
+        menuLandmarks = mpMapDrawer->DrawLandmarks();
 
         pangolin::FinishFrame();
 

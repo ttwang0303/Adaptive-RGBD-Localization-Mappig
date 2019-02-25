@@ -89,7 +89,6 @@ void Odometry::Compute(Frame* pF1, Frame* pF2, const vector<cv::DMatch>& vMatche
         // Update inlier flag
         for (const auto& m : mpRansac->mvInliers)
             pF2->SetInlier(m.trainIdx);
-
     }
 
     // ICP

@@ -3,11 +3,11 @@
 
 #include <mutex>
 
-class PointCloudDrawer;
+class MapDrawer;
 
 class Viewer {
 public:
-    Viewer(PointCloudDrawer* pCloudDrawer);
+    Viewer(MapDrawer* pMapDrawer);
 
     void Run();
 
@@ -24,7 +24,7 @@ public:
 private:
     bool Stop();
 
-    PointCloudDrawer* mpCloudDrawer;
+    MapDrawer* mpMapDrawer;
 
     float mViewpointX, mViewpointY, mViewpointZ, mViewpointF;
 

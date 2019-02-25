@@ -87,6 +87,56 @@ size_t Matcher::KnnMatch(Frame& pF1, Frame& pF2, vector<cv::DMatch>& vMatches12)
     return vMatches12.size();
 }
 
+size_t Matcher::ProjectionMatch(Frame* pF, const vector<Landmark*>& vpLandmarks, const float th)
+{
+    size_t nmatches = 0;
+
+    for (size_t i = 0; i < vpLandmarks.size(); i++) {
+        Landmark* pLM = vpLandmarks[i];
+        if (!pLM->mbTrackInView)
+            continue;
+        if (pLM->isBad())
+            continue;
+
+        const vector<size_t> vIndices = pF->GetFeaturesInArea(pLM->mTrackProjX, pLM->mTrackProjY, th);
+        if (vIndices.empty())
+            continue;
+
+        const cv::Mat LMd = pLM->GetDescriptor();
+
+        double bestDist1 = numeric_limits<double>::max();
+        double bestDist2 = numeric_limits<double>::max();
+        int bestIdx = -1;
+
+        for (auto& j : vIndices) {
+            if (pF->GetLandmark(j)) {
+                if (pF->GetLandmark(j)->Observations() > 0)
+                    continue;
+            }
+
+            const cv::Mat& d = pF->mDescriptors.row(j);
+            const double dist = DescriptorDistance(LMd, d);
+
+            if (dist < bestDist1) {
+                bestDist2 = bestDist1;
+                bestDist1 = dist;
+                bestIdx = j;
+            } else if (dist < bestDist2) {
+                bestDist2 = dist;
+            }
+        }
+
+        if (bestDist1 <= TH_HIGH) {
+            if (bestDist1 < mfNNratio * bestDist2) {
+                pF->AddLandmark(pLM, bestIdx);
+                nmatches++;
+            }
+        }
+    }
+
+    return nmatches;
+}
+
 int Matcher::BoWMatch(KeyFrame* pKF1, KeyFrame* pKF2, vector<cv::DMatch>& vMatches12)
 {
     DBoW3::FeatureVector::const_iterator f1it = pKF1->mFeatVec.begin();
@@ -233,7 +283,7 @@ int Matcher::Fuse(KeyFrame* pKF, const vector<Landmark*>& vpLandmarks, const flo
 void Matcher::DrawMatches(Frame& pF1, Frame& pF2, const std::vector<cv::DMatch>& m12, const int delay, const string& title)
 {
     cv::Mat out;
-    cv::drawMatches(pF1.mImColor, pF1.mvKeys, pF2.mImColor, pF2.mvKeys, m12, out, cv::Scalar::all(-1),
+    cv::drawMatches(pF1.mImGray, pF1.mvKeys, pF2.mImGray, pF2.mvKeys, m12, out, cv::Scalar::all(-1),
         cv::Scalar::all(-1), vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
     cv::imshow(title, out);
     cv::waitKey(delay);
