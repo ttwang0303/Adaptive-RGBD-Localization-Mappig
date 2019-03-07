@@ -51,6 +51,7 @@ public:
 
     // Landmark observation functions
     virtual void AddLandmark(Landmark* pLandmark, const size_t& idx);
+    virtual void ReleaseLandmark(const size_t& idx);
     virtual std::vector<Landmark*> GetLandmarks();
     virtual Landmark* GetLandmark(const size_t& idx);
 
@@ -73,10 +74,15 @@ public:
 
     double mTimestamp;
 
+    cv::Mat mK;
+    cv::Mat mDistCoef;
+
     DenseCloud::Ptr mpCloud = nullptr;
 
     std::vector<cv::KeyPoint> mvKeys;
+    std::vector<cv::KeyPoint> mvKeysUn;
     std::vector<cv::Point3f> mvKeys3Dc;
+    std::vector<float> mvuRight;
 
     cv::Mat mDescriptors;
 
@@ -94,7 +100,19 @@ public:
     // Reference Keyframe.
     KeyFrame* mpReferenceKF;
 
+    // Undistorted Image Bounds (computed once).
+    static float mnMinX;
+    static float mnMaxX;
+    static float mnMinY;
+    static float mnMaxY;
+
+    static bool mbInitialComputations;
+
 protected:
+    void UndistortKeyPoints();
+
+    void ComputeImageBounds();
+
     // Camera pose.
     cv::Mat mTcw;
     cv::Mat Twc;

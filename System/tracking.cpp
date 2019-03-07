@@ -3,6 +3,7 @@
 #include "Core/keyframedatabase.h"
 #include "Core/landmark.h"
 #include "Core/map.h"
+#include "Drawer/viewer.h"
 #include "Features/extractor.h"
 #include "Features/matcher.h"
 #include "Odometry/odometry.h"
@@ -14,11 +15,12 @@
 
 using namespace std;
 
-Tracking::Tracking(DBoW3::Vocabulary* pVoc, Map* pMap, Database* pKFDB, Extractor* pExtractor)
+Tracking::Tracking(DBoW3::Vocabulary* pVoc, Map* pMap, Database* pKFDB, Extractor* pExtractor, Viewer* pViewer)
     : mState(NO_IMAGES_YET)
     , mpVocabulary(pVoc)
     , mpKeyFrameDB(pKFDB)
     , mpMap(pMap)
+    , mpViewer(pViewer)
     , mpExtractor(pExtractor)
 {
 }
@@ -38,6 +40,8 @@ cv::Mat Tracking::Track(const cv::Mat& imColor, const cv::Mat& imDepth, const do
     mpCurrentFrame.reset(new Frame(imColor, imDepth, timestamp));
     mpCurrentFrame->ExtractFeatures(mpExtractor);
 
+    mpViewer->SetKPsDetected(mpCurrentFrame->N);
+
     if (mState == NO_IMAGES_YET)
         mState = NOT_INITIALIZED;
 
@@ -46,48 +50,26 @@ cv::Mat Tracking::Track(const cv::Mat& imColor, const cv::Mat& imDepth, const do
 
     if (mState == NOT_INITIALIZED) {
         Initialization();
-    } else {
-        bool bOK;
-        if (mState == OK) {
-            CheckReplaced();
-
-            if (mVelocity.empty())
-                bOK = TrackReferenceKF();
-            else
-                bOK = TrackModel();
-        } else
-            bOK = false;
+    } else if (mState == OK) {
+        CheckReplaced();
+        TrackFrame();
 
         mpCurrentFrame->mpReferenceKF = mpReferenceKF;
 
-        if (bOK) {
-            if (TrackLocalMap()) {
-                mState = OK;
-                UpdateMotionModel();
-                CleanVOmatches();
-                DeleteTemporalPoints();
+        TrackLocalMap();
+        CleanVOmatches();
+        DeleteTemporalPoints();
 
-                if (NeedNewKF())
-                    CreateNewKF();
+        if (NeedNewKeyFrame())
+            CreateNewKeyFrame();
 
-                for (size_t i = 0; i < mpCurrentFrame->N; ++i) {
-                    if (mpCurrentFrame->GetLandmark(i) && mpCurrentFrame->IsOutlier(i))
-                        mpCurrentFrame->AddLandmark(static_cast<Landmark*>(nullptr), i);
-                }
-
-            } else {
-                mState = LOST;
-                if (mpMap->KeyFramesInMap() <= 5) {
-                    cerr << "Track lost soon after initialisation" << endl;
-                    terminate();
-                }
-            }
-
-            if (!mpCurrentFrame->mpReferenceKF)
-                mpCurrentFrame->mpReferenceKF = mpReferenceKF;
-
-            // mpLastFrame = mpCurrentFrame;
+        for (size_t i = 0; i < mpCurrentFrame->N; ++i) {
+            if (mpCurrentFrame->GetLandmark(i) && mpCurrentFrame->IsOutlier(i))
+                mpCurrentFrame->ReleaseLandmark(i);
         }
+
+        if (!mpCurrentFrame->mpReferenceKF)
+            mpCurrentFrame->mpReferenceKF = mpReferenceKF;
 
         mpLastFrame = mpCurrentFrame;
     }
@@ -151,21 +133,6 @@ void Tracking::CheckReplaced()
     }
 }
 
-bool Tracking::TrackReferenceKF()
-{
-    Matcher matcher(0.7f);
-    vector<cv::DMatch> vMatches12;
-    size_t nmatches = matcher.KnnMatch(mpReferenceKF, *mpCurrentFrame, vMatches12);
-
-    if (nmatches < 15)
-        return false;
-
-    mpOdometer->Compute(mpReferenceKF, mpCurrentFrame.get(), vMatches12);
-    int inliers = DiscardOutliers();
-    Matcher::DrawInlierPoints(*mpCurrentFrame);
-    return inliers >= 10;
-}
-
 void Tracking::UpdateLastFrame()
 {
     // Update pose according to reference keyframe
@@ -192,7 +159,7 @@ void Tracking::UpdateLastFrame()
 
     sort(vDepthIdx.begin(), vDepthIdx.end());
 
-    // We insert all close points (depth<3.09m)
+    // We insert all close points (depth<mThDepth)
     // If less than 100 close points, we insert the 100 closest ones.
     int nPoints = 0;
     for (size_t j = 0; j < vDepthIdx.size(); j++) {
@@ -203,9 +170,8 @@ void Tracking::UpdateLastFrame()
         Landmark* pLM = mpLastFrame->GetLandmark(i);
         if (!pLM)
             bCreateNew = true;
-        else if (pLM->Observations() < 1) {
+        else if (pLM->Observations() < 1)
             bCreateNew = true;
-        }
 
         if (bCreateNew) {
             cv::Mat x3D = mpLastFrame->UnprojectWorld(i);
@@ -219,15 +185,14 @@ void Tracking::UpdateLastFrame()
             nPoints++;
         }
 
-        if (vDepthIdx[j].first > 3.09f && nPoints > 100)
+        if (vDepthIdx[j].first > Calibration::mThDepth && nPoints > 100)
             break;
     }
 }
 
-bool Tracking::TrackModel()
+bool Tracking::TrackFrame()
 {
     UpdateLastFrame();
-    mpCurrentFrame->SetPose(mVelocity * mpLastFrame->GetPose());
 
     Matcher matcher(0.9f);
     vector<cv::DMatch> vMatches12;
@@ -236,9 +201,9 @@ bool Tracking::TrackModel()
     if (nmatches < 20)
         return false;
 
-    //mpOdometer->Compute(mpLastFrame.get(), mpCurrentFrame.get(), vMatches12);
-    PnPRansac::Compute(*mpCurrentFrame);
+    mpOdometer->Compute(mpLastFrame.get(), mpCurrentFrame.get(), vMatches12);
     int inliers = DiscardOutliers();
+    Matcher::DrawMatches(*mpLastFrame, *mpCurrentFrame, mpOdometer->mpRansac->mvInliers);
     return inliers >= 10;
 }
 
@@ -251,11 +216,11 @@ int Tracking::DiscardOutliers()
             continue;
 
         if (mpCurrentFrame->IsOutlier(i)) {
-            mpCurrentFrame->AddLandmark(static_cast<Landmark*>(nullptr), i);
+            mpCurrentFrame->ReleaseLandmark(i);
             mpCurrentFrame->SetInlier(i);
             pLM->mbTrackInView = false;
             pLM->mnLastFrameSeen = mpCurrentFrame->mnId;
-        } else /*if (pLM->Observations() > 0)*/ {
+        } else if (pLM->Observations() > 0) {
             nmatchesMap++;
         }
     }
@@ -271,11 +236,12 @@ bool Tracking::TrackLocalMap()
 
     SearchLocalLMs();
 
-    // PnPSolver::Compute(mpCurrentFrame.get());
-    PnPRansac::Compute(*mpCurrentFrame);
+    int nInliers = PnPSolver::Compute(mpCurrentFrame.get());
+    // int nInliers = PnPRansac::Compute(*mpCurrentFrame);
     Matcher::DrawInlierPoints(*mpCurrentFrame);
+    mpViewer->SetTotalInliers(nInliers);
 
-    mnMatchesInliers = 0;
+    nInliers = 0;
 
     // Update MapPoints Statistics
     for (size_t i = 0; i < mpCurrentFrame->N; i++) {
@@ -283,12 +249,12 @@ bool Tracking::TrackLocalMap()
             if (mpCurrentFrame->IsInlier(i)) {
                 mpCurrentFrame->GetLandmark(i)->IncreaseFound();
                 if (mpCurrentFrame->GetLandmark(i)->Observations() > 0)
-                    mnMatchesInliers++;
+                    nInliers++;
             }
         }
     }
 
-    if (mnMatchesInliers < 5)
+    if (nInliers < 10)
         return false;
     else
         return true;
@@ -306,7 +272,7 @@ void Tracking::UpdateLocalKFs()
                 for (const auto& [pKF, idx] : observations)
                     keyframeCounter[pKF]++;
             } else {
-                mpCurrentFrame->AddLandmark(static_cast<Landmark*>(nullptr), i);
+                mpCurrentFrame->ReleaseLandmark(i);
             }
         }
     }
@@ -433,7 +399,8 @@ void Tracking::SearchLocalLMs()
 
     if (nToMatch > 0) {
         Matcher matcher(0.8f);
-        matcher.ProjectionMatch(mpCurrentFrame.get(), mvpLocalLMs, 5.0f);
+        size_t nmatches = matcher.ProjectionMatch(mpCurrentFrame.get(), mvpLocalLMs, 8.0f);
+        mpViewer->SetTotalMatches(int(nmatches));
     }
 }
 
@@ -445,14 +412,6 @@ void Tracking::UpdateRelativePose()
     mlFrameTimes.push_back(mpCurrentFrame->mTimestamp);
 }
 
-void Tracking::UpdateMotionModel()
-{
-    if (!mpLastFrame->GetPose().empty())
-        mVelocity = mpCurrentFrame->GetPose() * mpLastFrame->GetPoseInv();
-    else
-        mVelocity = cv::Mat();
-}
-
 void Tracking::CleanVOmatches()
 {
     for (size_t i = 0; i < mpCurrentFrame->N; ++i) {
@@ -461,7 +420,7 @@ void Tracking::CleanVOmatches()
             continue;
         if (pLM->Observations() < 1) {
             mpCurrentFrame->SetInlier(i);
-            mpCurrentFrame->AddLandmark(static_cast<Landmark*>(nullptr), i);
+            mpCurrentFrame->ReleaseLandmark(i);
         }
     }
 }
@@ -487,15 +446,15 @@ double Tracking::RNorm(const cv::Mat& T)
     return acos(0.5 * (R.at<float>(0, 0) + R.at<float>(1, 1) + R.at<float>(2, 2) - 1.0));
 }
 
-bool Tracking::NeedNewKF()
+bool Tracking::NeedNewKeyFrame()
 {
     static const double mint = 0.15;
-    static const double minR = 0.15;
+    static const double minR = 0.25;
 
     if (mpLocalMapper->isStopped() || mpLocalMapper->StopRequested())
         return false;
 
-    bool bLocalMappingIdle = mpLocalMapper->AcceptKFs();
+    bool bLocalMappingIdle = mpLocalMapper->AcceptKeyFrames();
 
     cv::Mat delta = mpCurrentFrame->GetPoseInv() * mpReferenceKF->GetPose();
     bool c1 = (tNorm(delta) > mint || RNorm(delta) > minR);
@@ -516,7 +475,7 @@ bool Tracking::NeedNewKF()
     }
 }
 
-void Tracking::CreateNewKF()
+void Tracking::CreateNewKeyFrame()
 {
     if (!mpLocalMapper->SetNotStop(true))
         return;
@@ -529,7 +488,7 @@ void Tracking::CreateNewKF()
     mpCurrentFrame->UpdatePoseMatrices();
 
     // We sort points by the measured depth by the RGBD sensor.
-    // We create all those Landmarks whose depth < 3.09m.
+    // We create all those Landmarks whose depth < mThDepth.
     // If there are less than 100 close points we create the 100 closest.
     vector<pair<float, size_t>> vDepthIdx;
     vDepthIdx.reserve(mpCurrentFrame->N);
@@ -553,7 +512,7 @@ void Tracking::CreateNewKF()
                 bCreateNew = true;
             else if (pMP->Observations() < 1) {
                 bCreateNew = true;
-                mpCurrentFrame->AddLandmark(static_cast<Landmark*>(nullptr), i);
+                mpCurrentFrame->ReleaseLandmark(i);
             }
 
             if (bCreateNew) {
@@ -570,7 +529,7 @@ void Tracking::CreateNewKF()
                 nPoints++;
             }
 
-            if (vDepthIdx[j].first > 3.09f && nPoints > 100)
+            if (vDepthIdx[j].first > Calibration::mThDepth && nPoints > 100)
                 break;
         }
     }
@@ -622,7 +581,7 @@ void Tracking::SaveTrajectory(const string& filename)
     cout << " -Camera trajectory saved!" << endl;
 }
 
-void Tracking::SaveKeyFrameTrajectory(const string filename)
+void Tracking::SaveKeyFrameTrajectory(const string& filename)
 {
     cout << "Saving keyframe trajectory to " << filename << " ..." << endl;
 
@@ -645,4 +604,28 @@ void Tracking::SaveKeyFrameTrajectory(const string filename)
 
     f.close();
     cout << " -KeyFrame trajectory saved!" << endl;
+}
+
+void Tracking::SaveObservationHistogram(const string& filename)
+{
+    cout << "Saving observations histogram to " << filename << " ..." << endl;
+
+    vector<Landmark*> vpLMs = mpMap->GetAllLandmarks();
+    map<int, int> hist;
+    for (Landmark* pLM : vpLMs) {
+        if (!pLM)
+            continue;
+        if (pLM->isBad())
+            continue;
+
+        hist[pLM->Observations()]++;
+    }
+
+    ofstream fobs;
+    fobs.open(filename.c_str());
+    for (const auto& [obs, nLMs] : hist)
+        fobs << obs << "," << nLMs << endl;
+
+    fobs.close();
+    cout << " -Observations histogram saved!" << endl;
 }

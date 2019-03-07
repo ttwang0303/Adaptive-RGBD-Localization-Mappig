@@ -3,7 +3,7 @@
 #include "Core/keyframedatabase.h"
 #include "Core/map.h"
 #include "Features/matcher.h"
-#include "Odometry/ransac.h"
+#include "System/localmapping.h"
 #include "Utils/converter.h"
 
 using namespace std;
@@ -19,12 +19,16 @@ LoopClosing::LoopClosing(Map* pMap, Database* pDB, DBoW3::Vocabulary* pVoc)
 {
 }
 
+void LoopClosing::SetLocalMapper(LocalMapping* pLocalMapper)
+{
+}
+
 void LoopClosing::Run()
 {
     mbFinished = false;
 
     while (true) {
-        if (CheckNewKFs()) {
+        if (CheckNewKeyFrames()) {
 
             // Detect loop candidates
             if (DetectLoop()) {
@@ -37,24 +41,31 @@ void LoopClosing::Run()
     }
 }
 
-bool LoopClosing::CheckNewKFs()
+void LoopClosing::InsertKeyFrame(KeyFrame *pKF)
 {
-    unique_lock<mutex> lock(mMutexKFsQueue);
-    return (!mlpKFsQueue.empty());
+    unique_lock<mutex> lock(mMutexQueue);
+    if (pKF->mnId != 0)
+        mlpKeyFrameQueue.push_back(pKF);
+}
+
+bool LoopClosing::CheckNewKeyFrames()
+{
+    unique_lock<mutex> lock(mMutexQueue);
+    return (!mlpKeyFrameQueue.empty());
 }
 
 bool LoopClosing::DetectLoop()
 {
     {
-        unique_lock<mutex> lock(mMutexKFsQueue);
-        mpCurrentKF = mlpKFsQueue.front();
-        mlpKFsQueue.pop_front();
+        unique_lock<mutex> lock(mMutexQueue);
+        mpCurrentKF = mlpKeyFrameQueue.front();
+        mlpKeyFrameQueue.pop_front();
         // Avoid that a KF can be erased while its being process by this thread
         mpCurrentKF->SetNotErase();
     }
 
     // If the map contains less than 10 KF or less than 10 KF have passed from last loop detection
-    if (mpCurrentKF->GetId() < mLastLoopKFid + 10) {
+    if (mpCurrentKF->mnId < mLastLoopKFid + 10) {
         mpDB->Add(mpCurrentKF);
         mpCurrentKF->SetErase();
         return false;
@@ -83,38 +94,38 @@ bool LoopClosing::DetectLoop()
 
 bool LoopClosing::ComputeSim3()
 {
-    const size_t nInitialCandidates = mvpEnoughConsistentCandidates.size();
+//    const size_t nInitialCandidates = mvpEnoughConsistentCandidates.size();
 
-    Matcher matcher(0.75f);
+//    Matcher matcher(0.75f);
 
-    vector<Ransac*> vpRansacSolvers;
-    vpRansacSolvers.resize(nInitialCandidates);
+//    vector<Ransac*> vpRansacSolvers;
+//    vpRansacSolvers.resize(nInitialCandidates);
 
-    vector<vector<cv::DMatch>> vvMatches;
-    vvMatches.resize(nInitialCandidates);
+//    vector<vector<cv::DMatch>> vvMatches;
+//    vvMatches.resize(nInitialCandidates);
 
-    vector<bool> vbDiscarded;
-    vbDiscarded.resize(nInitialCandidates);
+//    vector<bool> vbDiscarded;
+//    vbDiscarded.resize(nInitialCandidates);
 
-    int nCandidates = 0;
+//    int nCandidates = 0;
 
-    for (size_t i = 0; i < nInitialCandidates; i++) {
-        KeyFrame* pKFc = mvpEnoughConsistentCandidates[i];
-        pKFc->SetNotErase();
+//    for (size_t i = 0; i < nInitialCandidates; i++) {
+//        KeyFrame* pKFc = mvpEnoughConsistentCandidates[i];
+//        pKFc->SetNotErase();
 
-        int nmatches = matcher.BoWMatch(mpCurrentKF, pKFc, vvMatches[i]);
+//        int nmatches = matcher.BoWMatch(mpCurrentKF, pKFc, vvMatches[i]);
 
-        if (nmatches < 20) {
-            vbDiscarded[i] = true;
-            continue;
-        } else {
-            Ransac* pSolver = new Ransac(mpCurrentKF, pKFc, vvMatches[i]);
-            pSolver->SetParameters(200, 20, 3.0f, 4);
-            vpRansacSolvers[i] = pSolver;
-        }
+//        if (nmatches < 20) {
+//            vbDiscarded[i] = true;
+//            continue;
+//        } else {
+//            Ransac* pSolver = new Ransac(mpCurrentKF, pKFc, vvMatches[i]);
+//            pSolver->SetParameters(200, 20, 3.0f, 4);
+//            vpRansacSolvers[i] = pSolver;
+//        }
 
-        nCandidates++;
-    }
+//        nCandidates++;
+//    }
 
-    bool bMatch = false;
+//    bool bMatch = false;
 }

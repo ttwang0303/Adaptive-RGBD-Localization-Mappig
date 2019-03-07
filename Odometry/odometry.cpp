@@ -10,7 +10,7 @@ using namespace std;
 Odometry::Odometry(const eAlgorithm& algorithm)
     : mOdometryAlgorithm(algorithm)
 {
-    if (algorithm == ADAPTIVE) {
+    if (algorithm == ADAPTIVE_RICP) {
         mpRansac = new Ransac(200, 20, 3.0f, 4);
         mpGicp = new GeneralizedICP(10, 0.07);
     } else if (algorithm == RANSAC) {
@@ -23,7 +23,7 @@ Odometry::Odometry(const eAlgorithm& algorithm)
         mpBA = new PnPSolver;
         mpGicp = nullptr;
         mpRansac = nullptr;
-    } else if (algorithm == ADAPTIVE_2) {
+    } else if (algorithm == ADAPTIVE_RBA) {
         mpBA = new PnPSolver;
         mpRansac = new Ransac(200, 20, 3.0f, 4);
         mpGicp = nullptr;
@@ -43,7 +43,7 @@ Odometry::~Odometry()
 void Odometry::Compute(Frame* pF1, Frame* pF2, const vector<cv::DMatch>& vMatches12)
 {
     // Adaptive
-    if (mOdometryAlgorithm == ADAPTIVE) {
+    if (mOdometryAlgorithm == ADAPTIVE_RICP) {
         // Run RANSAC
         mpRansac->Iterate(pF1, pF2, vMatches12);
         cv::Mat T12;
@@ -102,7 +102,7 @@ void Odometry::Compute(Frame* pF1, Frame* pF2, const vector<cv::DMatch>& vMatche
     }
 
     // Ransac + Motion only Bundle Adjustment
-    else if (mOdometryAlgorithm == ADAPTIVE_2) {
+    else if (mOdometryAlgorithm == ADAPTIVE_RBA) {
         // Get initial estimation
         mpRansac->Iterate(pF1, pF2, vMatches12);
         cv::Mat T12 = Converter::toMat<float, 4, 4>(mpRansac->mT12);

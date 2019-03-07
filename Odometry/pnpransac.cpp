@@ -19,10 +19,10 @@ int PnPRansac::Compute(Frame& frame)
         if (!pLM)
             continue;
 
-        const cv::KeyPoint& kp = frame.mvKeys[i];
+        const cv::KeyPoint& kpU = frame.mvKeysUn[i];
         cv::Mat Xw = pLM->GetWorldPos();
 
-        v2D.push_back(kp.pt);
+        v2D.push_back(kpU.pt);
         v3D.push_back(cv::Point3f(Xw.at<float>(0), Xw.at<float>(1), Xw.at<float>(2)));
         vnIndex.push_back(i);
     }
@@ -30,13 +30,8 @@ int PnPRansac::Compute(Frame& frame)
     if (v2D.size() < 10)
         return 0;
 
-    cv::Mat K = cv::Mat::eye(3, 3, CV_32F);
-    K.at<float>(0, 0) = Calibration::fx;
-    K.at<float>(1, 1) = Calibration::fy;
-    K.at<float>(0, 2) = Calibration::cx;
-    K.at<float>(1, 2) = Calibration::cy;
     cv::Mat r, t, inliers, T;
-    bool bOK = cv::solvePnPRansac(v3D, v2D, K, cv::Mat(), r, t, false, 500, 2.0f, 0.85, inliers);
+    bool bOK = cv::solvePnPRansac(v3D, v2D, frame.mK, cv::Mat(), r, t, false, 500, 3.0f, 0.85, inliers);
 
     if (bOK) {
         T = Converter::toHomogeneous(r, t);

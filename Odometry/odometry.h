@@ -14,8 +14,8 @@ public:
         RANSAC = 0,
         ICP,
         MOTION_ONLY_BA,
-        ADAPTIVE,
-        ADAPTIVE_2
+        ADAPTIVE_RICP,
+        ADAPTIVE_RBA
     };
 
     Odometry(const eAlgorithm& algorithm);

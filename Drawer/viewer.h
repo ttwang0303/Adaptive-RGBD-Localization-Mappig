@@ -21,6 +21,12 @@ public:
 
     void Release();
 
+    void SetMeanTrackigTime(const float& meanTime);
+    void SetFusedLMs(const int& nfused);
+    void SetTotalMatches(const int n);
+    void SetTotalInliers(const int n);
+    void SetKPsDetected(const size_t& n);
+
 private:
     bool Stop();
 
@@ -37,6 +43,13 @@ private:
     bool mbStopped;
     bool mbStopRequested;
     std::mutex mMutexStop;
+
+    std::mutex mMutexUpdate;
+    float mMeanTrackingTime;
+    float mFusedLMs;
+    int mMatched;
+    int mInliers;
+    size_t nKeypoints;
 };
 
 #endif // VIEWER_H

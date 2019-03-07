@@ -100,6 +100,7 @@ Odometry/odometry.cpp
 Odometry/pnpsolver.cpp
 Odometry/localbundleadjustment.cpp
 Odometry/pnpransac.cpp
+Odometry/globalbundleadjustment.cpp
 
 Core/frame.cpp
 Core/dbscan.cpp
@@ -111,6 +112,8 @@ Core/keyframedatabase.cpp
 System/tracking.cpp
 System/localmapping.cpp
 
+LoopClosing/loopclosing.cpp
+
 Drawer/viewer.cpp
 Drawer/mapdrawer.cpp
 
@@ -120,6 +123,7 @@ Features/detectoradjuster.cpp
 Features/statefulfeaturedetector.cpp
 Features/videodynamicadaptedfeaturedetector.cpp
 Features/videogridadaptedfeaturedetector.cpp
+Features/orbextractor.cpp
 )
 
 #add_library(icp SHARED

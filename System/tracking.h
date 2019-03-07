@@ -12,10 +12,11 @@ class Database;
 class Extractor;
 class Odometry;
 class LocalMapping;
+class Viewer;
 
 class Tracking {
 public:
-    Tracking(DBoW3::Vocabulary* pVoc, Map* pMap, Database* pKFDB, Extractor* pExtractor);
+    Tracking(DBoW3::Vocabulary* pVoc, Map* pMap, Database* pKFDB, Extractor* pExtractor, Viewer* pViewer);
 
     void SetLocalMapper(LocalMapping* pLocalMapper);
 
@@ -24,7 +25,8 @@ public:
     cv::Mat Track(const cv::Mat& imColor, const cv::Mat& imDepth, const double& timestamp);
 
     void SaveTrajectory(const std::string& filename);
-    void SaveKeyFrameTrajectory(const std::string filename);
+    void SaveKeyFrameTrajectory(const std::string& filename);
+    void SaveObservationHistogram(const std::string& filename);
 
 public:
     enum eTrackingState {
@@ -49,19 +51,17 @@ protected:
     void Initialization();
 
     void CheckReplaced();
-    bool TrackReferenceKF();
-    bool TrackModel();
+    bool TrackFrame();
 
     void UpdateLastFrame();
     int DiscardOutliers();
-    void UpdateMotionModel();
     void CleanVOmatches();
     void DeleteTemporalPoints();
 
     double tNorm(const cv::Mat& T);
     double RNorm(const cv::Mat& T);
-    bool NeedNewKF();
-    void CreateNewKF();
+    bool NeedNewKeyFrame();
+    void CreateNewKeyFrame();
 
     // Local map functions
     bool TrackLocalMap();
@@ -83,19 +83,15 @@ protected:
 
     Map* mpMap;
 
+    Viewer* mpViewer;
+
     Extractor* mpExtractor;
 
     Odometry* mpOdometer;
 
-    // Current matches in frame
-    int mnMatchesInliers;
-
     KeyFrame* mpLastKF;
     Ptr<Frame> mpLastFrame;
     unsigned int mnLastKFid;
-
-    // Motion model
-    cv::Mat mVelocity;
 
     std::list<Landmark*> mlpTemporalPoints;
 };

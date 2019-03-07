@@ -8,10 +8,11 @@
 class Map;
 class Landmark;
 class KeyFrame;
+class Viewer;
 
 class LocalMapping {
 public:
-    LocalMapping(Map* pMap, DBoW3::Vocabulary* pVoc);
+    LocalMapping(Map* pMap, DBoW3::Vocabulary* pVoc, Viewer* pViewer);
 
     // Main function
     void Run();
@@ -25,7 +26,7 @@ public:
     void Release();
     bool isStopped();
     bool StopRequested();
-    bool AcceptKFs();
+    bool AcceptKeyFrames();
     void SetAcceptKFs(bool flag);
     bool SetNotStop(bool flag);
 
@@ -60,6 +61,8 @@ protected:
     DBoW3::Vocabulary* mpVocabulary;
 
     Map* mpMap;
+
+    Viewer* mpViewer;
 
     std::list<KeyFrame*> mKeyFramesQueue;
 

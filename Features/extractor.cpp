@@ -1,6 +1,7 @@
 #include "extractor.h"
 #include "Utils/common.h"
 #include "detectoradjuster.h"
+#include "orbextractor.h"
 #include "statefulfeaturedetector.h"
 #include "videodynamicadaptedfeaturedetector.h"
 #include "videogridadaptedfeaturedetector.h"
@@ -35,13 +36,17 @@ Extractor::Extractor(const Extractor::eAlgorithm& detector, const Extractor::eAl
     mNorm = mpDescriptor->defaultNorm();
 }
 
-void Extractor::Extract(cv::InputArray image, cv::InputArray mask, std::vector<cv::KeyPoint>& keypoints, cv::OutputArray descriptors)
+void Extractor::Extract(cv::InputArray image, cv::InputArray mask, vector<cv::KeyPoint>& keypoints, cv::OutputArray descriptors)
 {
-    mpDetector->detect(image, keypoints);
-    if (keypoints.size() > nFeatures)
-        cv::KeyPointsFilter::retainBest(keypoints, nFeatures);
+    if (mDetectorAlgorithm == ORB_SLAM2 && mDescriptorAlgorithm == ORB_SLAM2) {
+        mpDetector->detectAndCompute(image, cv::noArray(), keypoints, descriptors);
+    } else {
+        mpDetector->detect(image, keypoints);
+        if (keypoints.size() > nFeatures)
+            cv::KeyPointsFilter::retainBest(keypoints, nFeatures);
 
-    mpDescriptor->compute(image, keypoints, descriptors);
+        mpDescriptor->compute(image, keypoints, descriptors);
+    }
 }
 
 void Extractor::CreateAdaptiveDetector()
@@ -77,11 +82,14 @@ void Extractor::CreateDetector()
     case ORB:
         mpDetector = cv::ORB::create(nFeatures, 1.2f, 8);
         break;
+    case ORB_SLAM2:
+        mpDetector.reset(new ORBextractor(nFeatures, 1.2f, 8, 20, 7));
+        break;
     case FAST:
         mpDetector = cv::FastFeatureDetector::create();
         break;
     case GFTT:
-        mpDetector = cv::GFTTDetector::create(nFeatures, 0.01, 5, 3, false, 0.04);
+        mpDetector = cv::GFTTDetector::create(nFeatures, 0.01, 3, 3, false, 0.04);
         break;
     case STAR:
         mpDetector = cv::xfeatures2d::StarDetector::create(45, 6, 10, 10, 5);
@@ -104,6 +112,8 @@ void Extractor::CreateDetector()
 void Extractor::CreateDescriptor()
 {
     if (mDescriptorAlgorithm == ORB)
+        mpDescriptor = cv::ORB::create();
+    else if (mDescriptorAlgorithm == ORB_SLAM2)
         mpDescriptor = cv::ORB::create();
     else if (mDescriptorAlgorithm == BRISK)
         mpDescriptor = cv::BRISK::create();

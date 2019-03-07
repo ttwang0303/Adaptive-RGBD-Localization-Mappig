@@ -7,6 +7,7 @@ class Extractor {
 public:
     enum eAlgorithm {
         ORB = 0,
+        ORB_SLAM2,
         FAST,
         GFTT,
         STAR,

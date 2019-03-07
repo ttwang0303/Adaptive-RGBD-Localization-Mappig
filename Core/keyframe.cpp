@@ -28,7 +28,15 @@ KeyFrame::KeyFrame(Frame& frame, Map* pMap, Database* pKFDB)
     mImDepth = frame.mImDepth;
     mTimestamp = frame.mTimestamp;
     mvKeys = frame.mvKeys;
+    mvKeysUn = frame.mvKeysUn;
     mvKeys3Dc = frame.mvKeys3Dc;
+    mvuRight = frame.mvuRight;
+    mnMinX = frame.mnMinX;
+    mnMinY = frame.mnMinY;
+    mnMaxX = frame.mnMaxX;
+    mnMaxY = frame.mnMaxY;
+    mK = frame.mK;
+    mDistCoef = frame.mDistCoef;
     mDescriptors = frame.mDescriptors;
     mBowVec = frame.mBowVec;
     mFeatVec = frame.mFeatVec;
@@ -153,7 +161,7 @@ void KeyFrame::UpdateConnections()
     // If the counter is greater than threshold add connection
     // In case no keyframe counter is over threshold add the one with maximum counter
     int nmax = 0;
-    KeyFrame* pKFmax = NULL;
+    KeyFrame* pKFmax = nullptr;
     int th = 15;
 
     vector<pair<int, KeyFrame*>> vPairs;
@@ -322,6 +330,12 @@ Landmark* KeyFrame::GetLandmark(const size_t& idx)
     return mvpLandmarks[idx];
 }
 
+void KeyFrame::ReleaseLandmark(const size_t& idx)
+{
+    unique_lock<mutex> lock(mMutexFeatures);
+    mvpLandmarks[idx] = static_cast<Landmark*>(nullptr);
+}
+
 void KeyFrame::ReplaceLandmark(const size_t& idx, Landmark* pLM)
 {
     mvpLandmarks[idx] = pLM;
@@ -351,6 +365,28 @@ void KeyFrame::EraseLandmark(Landmark* pLM)
     int idx = pLM->GetIndexInKeyFrame(this);
     if (idx >= 0)
         mvpLandmarks[idx] = static_cast<Landmark*>(nullptr);
+}
+
+int KeyFrame::TrackedLandmarks(const int& minObs)
+{
+    unique_lock<mutex> lock(mMutexFeatures);
+
+    int nPoints = 0;
+    const bool bCheckObs = minObs > 0;
+    for (size_t i = 0; i < N; i++) {
+        Landmark* pLM = mvpLandmarks[i];
+        if (pLM) {
+            if (!pLM->isBad()) {
+                if (bCheckObs) {
+                    if (pLM->Observations() >= minObs)
+                        nPoints++;
+                } else
+                    nPoints++;
+            }
+        }
+    }
+
+    return nPoints;
 }
 
 cv::Mat KeyFrame::UnprojectWorld(const size_t& i)
@@ -387,7 +423,7 @@ void KeyFrame::SetErase()
 
 bool KeyFrame::IsInImage(const float& x, const float& y) const
 {
-    return (x >= 0.0f && x < mImGray.cols && y >= 0.0f && y < mImGray.rows);
+    return (x >= mnMinX && x < mnMaxX && y >= mnMinY && y < mnMaxY);
 }
 
 void KeyFrame::SetBadFlag()

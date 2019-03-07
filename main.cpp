@@ -14,8 +14,13 @@
 
 using namespace std;
 
-const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset_freiburg1_desk/";
+const string baseDir = "/home/antonio/Documents/M.C.C/Tesis/Dataset/rgbd_dataset_freiburg1_room/";
 const string vocDir = "./vocab/voc_fr1_GFTT_BRIEF.yml.gz";
+const Extractor::eAlgorithm detector = Extractor::ORB_SLAM2;
+const Extractor::eAlgorithm descriptor = Extractor::ORB_SLAM2;
+const Extractor::eMode emode = Extractor::NORMAL;
+
+const Odometry::eAlgorithm odometer = Odometry::ADAPTIVE_RBA;
 
 int main()
 {
@@ -51,7 +56,7 @@ int main()
          << endl;
 
     // This is a Feature-based method
-    Extractor* pExtractor = new Extractor(Extractor::GFTT, Extractor::BRIEF, Extractor::NORMAL);
+    Extractor* pExtractor = new Extractor(detector, descriptor, emode);
 
     // Store Landmarks and KeyFrames
     Map* pMap = new Map();
@@ -74,12 +79,12 @@ int main()
     thread* ptViewer = new thread(&Viewer::Run, pViewer);
 
     // Odometry algorithm
-    Odometry* pOdometry = new Odometry(Odometry::ADAPTIVE_2);
+    Odometry* pOdometry = new Odometry(odometer);
 
-    LocalMapping* pLocalMapper = new LocalMapping(pMap, pVocabulary);
+    LocalMapping* pLocalMapper = new LocalMapping(pMap, pVocabulary, pViewer);
     thread* ptLocalMapping = new thread(&LocalMapping::Run, pLocalMapper);
 
-    Tracking* pTracker = new Tracking(pVocabulary, pMap, pKeyFrameDB, pExtractor);
+    Tracking* pTracker = new Tracking(pVocabulary, pMap, pKeyFrameDB, pExtractor, pViewer);
     pTracker->SetLocalMapper(pLocalMapper);
     pTracker->SetOdometer(pOdometry);
 
@@ -92,6 +97,8 @@ int main()
         tm.start();
         pTracker->Track(imColor, imDepth, vTimestamps[n]);
         tm.stop();
+
+        pViewer->SetMeanTrackigTime(static_cast<float>(tm.getTimeSec() / tm.getCounter()));
     }
 
     cout << "Mean tracking time: " << tm.getTimeSec() / tm.getCounter() << " s." << endl;
@@ -116,6 +123,7 @@ int main()
 
     pTracker->SaveTrajectory("CameraTrajectory.txt");
     pTracker->SaveKeyFrameTrajectory("KeyFrameTrajectory.txt");
+    pTracker->SaveObservationHistogram("Histogram.csv");
 
     pMap->Clear();
 

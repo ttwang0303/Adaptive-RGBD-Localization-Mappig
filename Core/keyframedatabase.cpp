@@ -47,10 +47,11 @@ void Database::Clear()
 
 vector<KeyFrame*> Database::Query(KeyFrame* pKF, float minScore)
 {
+    set<KeyFrame*> spConnectedKFs = pKF->GetConnectedKeyFrames();
     list<KeyFrame*> lKFsSharingWords;
 
     // Search KeyFrames that share a word with current KeyFrame
-    // Simulate connected KeyFrames with distance of 10
+    // Discard keyframes connected to the query keyframe
     {
         unique_lock<mutex> lock(mMutex);
 
@@ -61,7 +62,7 @@ vector<KeyFrame*> Database::Query(KeyFrame* pKF, float minScore)
             for (KeyFrame* pKFsw : lKFs) {
                 if (pKFsw->mnLoopQuery != pKF->mnId) {
                     pKFsw->mnLoopWords = 0;
-                    if (abs(static_cast<int>(pKF->mnId - pKFsw->mnId)) > 10) {
+                    if (!spConnectedKFs.count(pKFsw)) {
                         pKFsw->mnLoopQuery = pKF->mnId;
                         lKFsSharingWords.push_back(pKFsw);
                     }
@@ -98,15 +99,47 @@ vector<KeyFrame*> Database::Query(KeyFrame* pKF, float minScore)
     if (lScoreAndMatch.empty())
         return vector<KeyFrame*>();
 
-    set<KeyFrame*> spAlreadyAddedKF;
-    vector<KeyFrame*> vpLoopCandidates;
-    vpLoopCandidates.reserve(lScoreAndMatch.size());
+    list<pair<float, KeyFrame*>> lAccScoreAndMatch;
+    float bestAccScore = minScore;
 
+    // Accumulate score by covisibility
     for (auto& pair : lScoreAndMatch) {
         KeyFrame* pKFi = pair.second;
-        if (!spAlreadyAddedKF.count(pKFi)) {
-            vpLoopCandidates.push_back(pKFi);
-            spAlreadyAddedKF.insert(pKFi);
+        vector<KeyFrame*> vpNeighs = pKFi->GetBestCovisibilityKeyFrames(10);
+
+        float bestScore = pair.first;
+        float accScore = pair.first;
+        KeyFrame* pBestKF = pKFi;
+        for (KeyFrame* pKF2 : vpNeighs) {
+            if (pKF2->mnLoopQuery == pKF->mnId && pKF2->mnLoopWords > minCommonWords) {
+                accScore += pKF2->mLoopScore;
+                if (pKF2->mLoopScore > bestScore) {
+                    pBestKF = pKF2;
+                    bestScore = pKF2->mLoopScore;
+                }
+            }
+        }
+
+        lAccScoreAndMatch.push_back({ accScore, pBestKF });
+        if (accScore > bestAccScore)
+            bestAccScore = accScore;
+    }
+
+    // Return all KFs with score > 0.75*bestScore
+    float minScoreToRetain = 0.75f * bestAccScore;
+
+    set<KeyFrame*> spAlreadyAddedKF;
+    vector<KeyFrame*> vpLoopCandidates;
+    vpLoopCandidates.reserve(lAccScoreAndMatch.size());
+
+    for (auto& pair : lAccScoreAndMatch) {
+        float score = pair.first;
+        if (score > minScoreToRetain) {
+            KeyFrame* pKFi = pair.second;
+            if (!spAlreadyAddedKF.count(pKFi)) {
+                vpLoopCandidates.push_back(pKFi);
+                spAlreadyAddedKF.insert(pKFi);
+            }
         }
     }
 

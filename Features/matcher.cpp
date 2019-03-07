@@ -87,7 +87,7 @@ size_t Matcher::KnnMatch(Frame& pF1, Frame& pF2, vector<cv::DMatch>& vMatches12)
     return vMatches12.size();
 }
 
-size_t Matcher::ProjectionMatch(Frame* pF, const vector<Landmark*>& vpLandmarks, const float th)
+size_t Matcher::ProjectionMatch(Frame* pFrame, const vector<Landmark*>& vpLandmarks, const float th)
 {
     size_t nmatches = 0;
 
@@ -98,7 +98,7 @@ size_t Matcher::ProjectionMatch(Frame* pF, const vector<Landmark*>& vpLandmarks,
         if (pLM->isBad())
             continue;
 
-        const vector<size_t> vIndices = pF->GetFeaturesInArea(pLM->mTrackProjX, pLM->mTrackProjY, th);
+        const vector<size_t> vIndices = pFrame->GetFeaturesInArea(pLM->mTrackProjX, pLM->mTrackProjY, th);
         if (vIndices.empty())
             continue;
 
@@ -106,31 +106,38 @@ size_t Matcher::ProjectionMatch(Frame* pF, const vector<Landmark*>& vpLandmarks,
 
         double bestDist1 = numeric_limits<double>::max();
         double bestDist2 = numeric_limits<double>::max();
+        int bestLevel = -1;
+        int bestLevel2 = -1;
         int bestIdx = -1;
 
         for (auto& j : vIndices) {
-            if (pF->GetLandmark(j)) {
-                if (pF->GetLandmark(j)->Observations() > 0)
+            if (pFrame->GetLandmark(j)) {
+                if (pFrame->GetLandmark(j)->Observations() > 0)
                     continue;
             }
 
-            const cv::Mat& d = pF->mDescriptors.row(j);
+            const cv::Mat& d = pFrame->mDescriptors.row(j);
             const double dist = DescriptorDistance(LMd, d);
 
             if (dist < bestDist1) {
                 bestDist2 = bestDist1;
                 bestDist1 = dist;
+                bestLevel2 = bestLevel;
+                bestLevel = pFrame->mvKeysUn[j].octave;
                 bestIdx = j;
             } else if (dist < bestDist2) {
+                bestLevel2 = pFrame->mvKeysUn[j].octave;
                 bestDist2 = dist;
             }
         }
 
         if (bestDist1 <= TH_HIGH) {
-            if (bestDist1 < mfNNratio * bestDist2) {
-                pF->AddLandmark(pLM, bestIdx);
-                nmatches++;
-            }
+            if (bestLevel == bestLevel2 && bestDist1 > mfNNratio * bestDist2)
+                continue;
+
+            pFrame->AddLandmark(pLM, bestIdx);
+            // pFrame->SetOutlier(bestIdx);
+            nmatches++;
         }
     }
 
@@ -234,6 +241,8 @@ int Matcher::Fuse(KeyFrame* pKF, const vector<Landmark*>& vpLandmarks, const flo
         if (!pKF->IsInImage(u, v))
             continue;
 
+        const float ur = u - Calibration::mbf * invz;
+
         // Search in a radius
         const vector<size_t> vIndices = pKF->GetFeaturesInArea(u, v, th);
         if (vIndices.empty())
@@ -241,24 +250,49 @@ int Matcher::Fuse(KeyFrame* pKF, const vector<Landmark*>& vpLandmarks, const flo
 
         const cv::Mat dLM = pLM->GetDescriptor();
 
-        double bestDist1 = numeric_limits<double>::max();
-        int bestQueryIdx = -1;
-        int bestTrainIdx = -1;
+        double bestDist = numeric_limits<double>::max();
+        int bestIdx = -1;
 
         for (auto& j : vIndices) {
+            const cv::KeyPoint& kp = pKF->mvKeysUn[j];
+            const int& kpLevel = kp.octave;
+
+            if (pKF->mvuRight[j] >= 0) {
+                // Check reprojection error in stereo
+                const float& kpx = kp.pt.x;
+                const float& kpy = kp.pt.y;
+                const float& kpr = pKF->mvuRight[j];
+                const float ex = u - kpx;
+                const float ey = v - kpy;
+                const float er = ur - kpr;
+                const float e2 = ex * ex + ey * ey + er * er;
+
+                if (e2 > 7.8f /** (kpLevel + 1)*/) {
+                    continue;
+                }
+            } else {
+                const float& kpx = kp.pt.x;
+                const float& kpy = kp.pt.y;
+                const float ex = u - kpx;
+                const float ey = v - kpy;
+                const float e2 = ex * ex + ey * ey;
+
+                if (e2 > 5.99f /** (kpLevel + 1)*/)
+                    continue;
+            }
+
             const cv::Mat& dKF = pKF->mDescriptors.row(j);
             const double dist = DescriptorDistance(dLM, dKF);
 
-            if (dist < bestDist1) {
-                bestDist1 = dist;
-                bestQueryIdx = j;
-                bestTrainIdx = i;
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestIdx = j;
             }
         }
 
         // If there is already a MapPoint replace otherwise add new measurement
-        if (bestDist1 <= TH_LOW) {
-            Landmark* pLMinKF = pKF->GetLandmark(bestQueryIdx);
+        if (bestDist <= TH_LOW) {
+            Landmark* pLMinKF = pKF->GetLandmark(bestIdx);
             if (pLMinKF) {
                 if (!pLMinKF->isBad()) {
                     if (pLMinKF->Observations() > pLM->Observations())
@@ -267,13 +301,11 @@ int Matcher::Fuse(KeyFrame* pKF, const vector<Landmark*>& vpLandmarks, const flo
                         pLMinKF->Replace(pLM);
                 }
             } else {
-                pLM->AddObservation(pKF, bestQueryIdx);
-                pKF->AddLandmark(pLM, bestQueryIdx);
+                pLM->AddObservation(pKF, bestIdx);
+                pKF->AddLandmark(pLM, bestIdx);
             }
 
             nFused++;
-            // cv::DMatch match12(bestQueryIdx, bestTrainIdx, bestDist1);
-            // vMatches12.push_back(match12);
         }
     }
 

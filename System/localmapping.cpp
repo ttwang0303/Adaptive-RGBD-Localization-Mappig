@@ -2,18 +2,21 @@
 #include "Core/keyframe.h"
 #include "Core/landmark.h"
 #include "Core/map.h"
+#include "Drawer/viewer.h"
 #include "Features/matcher.h"
 #include "Odometry/localbundleadjustment.h"
+#include "Utils/common.h"
 #include <iostream>
 
 using namespace std;
 
-LocalMapping::LocalMapping(Map* pMap, DBoW3::Vocabulary* pVoc)
+LocalMapping::LocalMapping(Map* pMap, DBoW3::Vocabulary* pVoc, Viewer* pViewer)
     : mbResetRequested(false)
     , mbFinishRequested(false)
     , mbFinished(true)
     , mpVocabulary(pVoc)
     , mpMap(pMap)
+    , mpViewer(pViewer)
     , mbAbortBA(false)
     , mbStopped(false)
     , mbStopRequested(false)
@@ -109,7 +112,7 @@ void LocalMapping::LandmarkCulling()
     list<Landmark*>::iterator it = mlpRecentLandmarks.begin();
     const unsigned long int nCurrentKFid = mpCurrentKF->mnId;
 
-    int nThObs = 2;
+    int nThObs = 3;
     const int cnThObs = nThObs;
 
     while (it != mlpRecentLandmarks.end()) {
@@ -135,13 +138,13 @@ void LocalMapping::FuseLandmarks()
     const vector<KeyFrame*> vpNeighKFs = mpCurrentKF->GetBestCovisibilityKeyFrames(10);
     vector<KeyFrame*> vpTargetKFs;
 
-    for (KeyFrame* pKFi : vpNeighKFs) {
-        if (pKFi->isBad() || pKFi->mnFuseTargetForKF == mpCurrentKF->mnId)
+    for (KeyFrame* pKFcov : vpNeighKFs) {
+        if (pKFcov->isBad() || pKFcov->mnFuseTargetForKF == mpCurrentKF->mnId)
             continue;
-        vpTargetKFs.push_back(pKFi);
-        pKFi->mnFuseTargetForKF = mpCurrentKF->mnId;
+        vpTargetKFs.push_back(pKFcov);
+        pKFcov->mnFuseTargetForKF = mpCurrentKF->mnId;
 
-        const vector<KeyFrame*> vpSecondNeighKFs = pKFi->GetBestCovisibilityKeyFrames(5);
+        const vector<KeyFrame*> vpSecondNeighKFs = pKFcov->GetBestCovisibilityKeyFrames(5);
         for (KeyFrame* pKFi2 : vpSecondNeighKFs) {
             if (pKFi2->isBad() || pKFi2->mnFuseTargetForKF == mpCurrentKF->mnId || pKFi2->mnId == mpCurrentKF->mnId)
                 continue;
@@ -150,10 +153,12 @@ void LocalMapping::FuseLandmarks()
     }
 
     // Search matches by projection from current KF in target KFs
+    int nfused = 0;
     Matcher matcher;
+    const float radius = 4.0f;
     vector<Landmark*> vpLandmarks = mpCurrentKF->GetLandmarks();
     for (KeyFrame* pKFi : vpTargetKFs)
-        matcher.Fuse(pKFi, vpLandmarks, 3);
+        nfused += matcher.Fuse(pKFi, vpLandmarks, radius);
 
     // Search matches by projection from target KFs in current KF
     vector<Landmark*> vpFuseCandidates;
@@ -172,7 +177,8 @@ void LocalMapping::FuseLandmarks()
         }
     }
 
-    matcher.Fuse(mpCurrentKF, vpFuseCandidates, 3);
+    nfused += matcher.Fuse(mpCurrentKF, vpFuseCandidates, radius);
+    mpViewer->SetFusedLMs(nfused);
 
     // Update points
     vpLandmarks = mpCurrentKF->GetLandmarks();
@@ -208,7 +214,7 @@ void LocalMapping::KeyFrameCulling()
                 continue;
             if (pLM->isBad())
                 continue;
-            if (pKF->mvKeys3Dc[i].z > 3.09f || pKF->mvKeys3Dc[i].z < 0)
+            if (pKF->mvKeys3Dc[i].z > Calibration::mThDepth || pKF->mvKeys3Dc[i].z < 0)
                 continue;
 
             nLMs++;
@@ -227,7 +233,7 @@ void LocalMapping::KeyFrameCulling()
             }
         }
 
-        if (nRedundantObs > 0.99 * nLMs)
+        if (nRedundantObs > 0.95 * nLMs)
             pKF->SetBadFlag();
     }
 }
@@ -289,7 +295,7 @@ void LocalMapping::Release()
     cout << "Local Mapping RELEASE" << endl;
 }
 
-bool LocalMapping::AcceptKFs()
+bool LocalMapping::AcceptKeyFrames()
 {
     unique_lock<mutex> lock(mMutexAccept);
     return mbAcceptKFs;

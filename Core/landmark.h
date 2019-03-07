@@ -48,6 +48,7 @@ public:
     // Used by Tracking
     float mTrackProjX;
     float mTrackProjY;
+    float mTrackProjXR;
     bool mbTrackInView;
     long unsigned int mnTrackReferenceForFrame;
     long unsigned int mnLastFrameSeen;
@@ -55,6 +56,9 @@ public:
     // Used by local mapping
     long unsigned int mnBALocalForKF;
     long unsigned int mnFuseCandidateForKF;
+
+    cv::Mat mPosGBA;
+    long unsigned int mnBAGlobalForKF;
 
     static std::mutex mGlobalMutex;
 

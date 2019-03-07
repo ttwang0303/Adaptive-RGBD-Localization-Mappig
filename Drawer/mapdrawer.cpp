@@ -17,9 +17,9 @@ MapDrawer::MapDrawer(Map* pMap)
     mpMapCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZRGB>>();
 
     mPointSize = 2.0f;
-    mKeyFrameSize = 0.05;
+    mKeyFrameSize = 0.05f;
     mKeyFrameLineWidth = 1;
-    mGraphLineWidth = 0.9;
+    mGraphLineWidth = 0.9f;
 }
 
 size_t MapDrawer::DrawLandmarks()
@@ -55,9 +55,37 @@ size_t MapDrawer::DrawKeyFrames(const bool bDrawKF, const bool bDrawGraph)
     static const float h = mKeyFrameSize * 0.75f;
     static const float z = mKeyFrameSize * 0.6f;
 
-    const vector<KeyFrame*> vpKFs = mpMap->GetAllKeyFrames();
+    vector<KeyFrame*> vpKFs = mpMap->GetAllKeyFrames();
+    if (vpKFs.empty())
+        return 0;
+
+    sort(vpKFs.begin(), vpKFs.end(), [](const KeyFrame* pKF1, const KeyFrame* pKF2) {
+        return pKF1->mnId < pKF2->mnId;
+    });
 
     if (bDrawKF) {
+        KeyFrame* pLastKF = vpKFs.back();
+        cv::Mat Ow = pLastKF->GetCameraCenter();
+        vector<Landmark*> vpLMs = pLastKF->GetLandmarks();
+
+        glLineWidth(mKeyFrameLineWidth);
+        glColor4f(0.82f, 0.82f, 0.82f, 0.35f);
+        glBegin(GL_LINES);
+
+        for (size_t i = 0; i < pLastKF->N; i++) {
+            Landmark* pLM = vpLMs[i];
+            if (!pLM)
+                continue;
+            if (pLastKF->IsOutlier(i))
+                continue;
+
+            cv::Mat Xw = pLM->GetWorldPos();
+
+            glVertex3f(Ow.at<float>(0), Ow.at<float>(1), Ow.at<float>(2));
+            glVertex3f(Xw.at<float>(0), Xw.at<float>(1), Xw.at<float>(2));
+        }
+        glEnd();
+
         for (KeyFrame* pKF : vpKFs) {
             cv::Mat Twc = pKF->GetPoseInv().t();
 

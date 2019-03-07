@@ -72,7 +72,11 @@ void Landmark::AddObservation(KeyFrame* pKF, size_t idx)
     if (mObservations.count(pKF))
         return;
     mObservations[pKF] = idx;
-    nObs++;
+
+    if (pKF->mvuRight[idx] >= 0)
+        nObs += 2;
+    else
+        nObs++;
 }
 
 void Landmark::EraseObservation(KeyFrame* pKF)
@@ -82,7 +86,11 @@ void Landmark::EraseObservation(KeyFrame* pKF)
         unique_lock<mutex> lock(mMutexFeatures);
         if (mObservations.count(pKF)) {
             int idx = mObservations[pKF];
-            nObs--;
+            if (pKF->mvuRight[idx] >= 0)
+                nObs -= 2;
+            else
+                nObs--;
+
             mObservations.erase(pKF);
 
             if (mpRefKF == pKF)

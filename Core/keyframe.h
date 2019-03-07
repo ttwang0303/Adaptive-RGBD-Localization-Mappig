@@ -46,10 +46,12 @@ public:
     void AddLandmark(Landmark* pLandmark, const size_t& idx) override;
     std::vector<Landmark*> GetLandmarks() override;
     Landmark* GetLandmark(const size_t& idx) override;
+    void ReleaseLandmark(const size_t& idx) override;
     void ReplaceLandmark(const size_t& idx, Landmark* pLM);
     std::set<Landmark*> GetLandmarkSet();
     void EraseLandmark(const size_t& idx);
     void EraseLandmark(Landmark* pLM);
+    int TrackedLandmarks(const int& minObs);
 
     cv::Mat UnprojectWorld(const size_t& i) override;
 
@@ -82,6 +84,9 @@ public:
     long unsigned int mnLoopQuery;
     int mnLoopWords;
     float mLoopScore;
+
+    cv::Mat mTcwGBA;
+    long unsigned int mnBAGlobalForKF;
 
     // Pose relative to parent (this is computed when bad flag is activated)
     cv::Mat mTcp;

@@ -8,6 +8,7 @@
 class Map;
 class KeyFrame;
 class Database;
+class LocalMapping;
 
 class LoopClosing {
 public:
@@ -23,6 +24,8 @@ public:
 public:
     LoopClosing(Map* pMap, Database* pDB, DBoW3::Vocabulary* pVoc);
 
+    void SetLocalMapper(LocalMapping* pLocalMapper);
+
     // Main function
     void Run();
 
@@ -36,7 +39,7 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
 protected:
-    bool CheckNewKFs();
+    bool CheckNewKeyFrames();
 
     bool DetectLoop();
 
@@ -57,8 +60,10 @@ protected:
     Database* mpDB;
     DBoW3::Vocabulary* mpVocabulary;
 
-    std::list<KeyFrame*> mlpKFsQueue;
-    std::mutex mMutexKFsQueue;
+    LocalMapping* mpLocalMapper;
+
+    std::list<KeyFrame*> mlpKeyFrameQueue;
+    std::mutex mMutexQueue;
 
     // Loop detector variables
     KeyFrame* mpCurrentKF;

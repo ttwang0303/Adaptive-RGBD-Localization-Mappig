@@ -17,7 +17,7 @@ public:
 
     size_t KnnMatch(Frame& pF1, Frame& pF2, std::vector<cv::DMatch>& vMatches12);
 
-    size_t ProjectionMatch(Frame* pF, const std::vector<Landmark*>& vpLandmarks, const float th = 3.0);
+    size_t ProjectionMatch(Frame* pFrame, const std::vector<Landmark*>& vpLandmarks, const float th = 3.0);
 
     int BoWMatch(KeyFrame* pKF1, KeyFrame* pKF2, std::vector<cv::DMatch>& vMatches12);
 
